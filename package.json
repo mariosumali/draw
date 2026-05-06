@@ -1,0 +1,49 @@
+{
+  "name": "draw",
+  "version": "1.0.0",
+  "description": "Real-time multiplayer Quick Draw battle game.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "party:dev": "partykit dev --port 1999",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mariosumali/draw.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/mariosumali/draw/issues"
+  },
+  "homepage": "https://github.com/mariosumali/draw#readme",
+  "dependencies": {
+    "@tensorflow/tfjs": "^4.22.0",
+    "nanoid": "^5.1.11",
+    "next": "^16.2.4",
+    "partykit": "^0.0.115",
+    "partysocket": "^1.1.18",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "rough-notation": "^0.5.1",
+    "roughjs": "^4.6.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^16.2.4",
+    "jsdom": "^29.1.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
+  }
+}

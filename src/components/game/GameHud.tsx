@@ -45,7 +45,7 @@ export function GameHud({ receivedAt, state, localPlayer }: GameHudProps) {
       </div>
       <div>
         <span className="hud-label">Players</span>
-        <strong>{state.players.length}/2</strong>
+        <strong>{state.players.filter((player) => player.connected).length}/{state.maxPlayers}</strong>
       </div>
     </section>
   );

@@ -1,65 +1,81 @@
 import { SoundEngine } from "./sound-engine";
 
 const MUSIC_PATH = "/audio/lobby-music.mp3";
-const MUSIC_VOLUME = 0.3;
+const MUSIC_VOLUME = 0.36;
 const FADE_DURATION = 1;
 
 let audioBuffer: AudioBuffer | null = null;
+let loadingPromise: Promise<AudioBuffer> | null = null;
 let source: AudioBufferSourceNode | null = null;
 let gainNode: GainNode | null = null;
-let loading = false;
+let starting = false;
 let playing = false;
+let startToken = 0;
 
 async function loadBuffer(): Promise<AudioBuffer> {
   if (audioBuffer) return audioBuffer;
-  if (loading) {
-    return new Promise((resolve) => {
-      const check = setInterval(() => {
-        if (audioBuffer) {
-          clearInterval(check);
-          resolve(audioBuffer);
-        }
-      }, 100);
+
+  if (!loadingPromise) {
+    loadingPromise = (async () => {
+      const ctx = SoundEngine.getContext();
+      const response = await fetch(MUSIC_PATH);
+      if (!response.ok) {
+        throw new Error(`Failed to load lobby music: ${response.status}`);
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+      return audioBuffer;
+    })().finally(() => {
+      loadingPromise = null;
     });
   }
 
-  loading = true;
-  const ctx = SoundEngine.getContext();
-  const response = await fetch(MUSIC_PATH);
-  const arrayBuffer = await response.arrayBuffer();
-  audioBuffer = await ctx.decodeAudioData(arrayBuffer);
-  loading = false;
-  return audioBuffer;
+  return loadingPromise;
 }
 
 export async function startLobbyMusic() {
-  if (playing) return;
+  if (playing || starting) return;
 
-  const buffer = await loadBuffer();
-  const ctx = SoundEngine.getContext();
-  const master = SoundEngine.getMasterGain();
+  starting = true;
+  const token = ++startToken;
 
-  gainNode = ctx.createGain();
-  gainNode.gain.setValueAtTime(0, ctx.currentTime);
-  gainNode.gain.linearRampToValueAtTime(MUSIC_VOLUME, ctx.currentTime + FADE_DURATION);
-  gainNode.connect(master);
+  try {
+    const buffer = await loadBuffer();
+    const ctx = SoundEngine.getContext();
+    const master = SoundEngine.getMasterGain();
 
-  source = ctx.createBufferSource();
-  source.buffer = buffer;
-  source.loop = true;
-  source.connect(gainNode);
-  source.start();
+    if (token !== startToken || playing) return;
 
-  playing = true;
+    gainNode = ctx.createGain();
+    gainNode.gain.setValueAtTime(0, ctx.currentTime);
+    gainNode.gain.linearRampToValueAtTime(MUSIC_VOLUME, ctx.currentTime + FADE_DURATION);
+    gainNode.connect(master);
 
-  source.onended = () => {
-    playing = false;
-    source = null;
-    gainNode = null;
-  };
+    source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    source.connect(gainNode);
+    source.start();
+
+    playing = true;
+
+    source.onended = () => {
+      playing = false;
+      source = null;
+      gainNode = null;
+    };
+  } catch (error) {
+    console.warn("Lobby music could not be started.", error);
+  } finally {
+    starting = false;
+  }
 }
 
 export function stopLobbyMusic() {
+  startToken += 1;
+  starting = false;
+
   if (!playing || !source || !gainNode) return;
 
   const ctx = SoundEngine.getContext();

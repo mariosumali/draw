@@ -1,0 +1,17 @@
+{
+  "name": "Draw Battle!",
+  "short_name": "Draw Battle",
+  "description": "Real-time multiplayer Quick Draw battle game.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fdf6e3",
+  "theme_color": "#fff176",
+  "icons": [
+    {
+      "src": "/brand/draw-battle-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

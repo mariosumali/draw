@@ -7,3 +7,8 @@ coverage
 .env
 .env*.local
 *.tsbuildinfo
+.vercel
+ml/.venv
+ml/__pycache__
+ml/data
+ml/artifacts

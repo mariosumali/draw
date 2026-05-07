@@ -1,6 +1,6 @@
 # Quick Draw Model Assets
 
-Place a TensorFlow.js Layers model bundle here:
+Place or export a TensorFlow.js Layers model bundle here:
 
 - `model.json`
 - model weight shard files referenced by `model.json`
@@ -18,4 +18,10 @@ public/models/quickdraw/group1-shard1ofN.bin
 public/models/quickdraw/classes.json
 ```
 
-DoodleNet is a known 345-class Quick Draw CNN converted to TensorFlow.js, but confirm its license before vendoring the weights in this repo.
+The recommended path is to regenerate these assets with `ml/train_quickdraw.py`,
+which trains from the official Google QuickDraw numpy bitmap dataset and writes
+`model.json`, weight shards, `classes.json`, and `model-metadata.json` here.
+
+The Google QuickDraw dataset is published under Creative Commons Attribution 4.0
+International. Keep attribution in project documentation when shipping generated
+model assets.

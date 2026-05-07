@@ -1,63 +1,142 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { nanoid } from "nanoid";
 
+import { LandingDemoCanvas } from "@/components/game/LandingDemoCanvas";
 import { DoodleDecoration } from "@/components/ui/DoodleDecoration";
+import { SoundToggle } from "@/components/ui/SoundToggle";
+import { startLobbyMusic, stopLobbyMusic } from "@/lib/audio/music";
+
+const landingFeatures = [
+  "Up to 8 players per room",
+  "Share an invite link in 1 click",
+  "AI guesses your sketch in real time",
+  "No sign-up. No download.",
+] as const;
 
 export default function Home() {
   const router = useRouter();
   const [playerName, setPlayerName] = useState("");
+  const [roomCode, setRoomCode] = useState("");
 
-  function createRoom() {
-    const roomId = nanoid(8);
+  useEffect(() => {
+    startLobbyMusic();
+    return () => stopLobbyMusic();
+  }, []);
+
+  function getRoomPath(roomId: string) {
     const params = new URLSearchParams();
     if (playerName.trim()) {
       params.set("name", playerName.trim());
     }
-    router.push(`/room/${roomId}${params.size ? `?${params.toString()}` : ""}`);
+    return `/room/${encodeURIComponent(roomId)}${params.size ? `?${params.toString()}` : ""}`;
+  }
+
+  function createRoom() {
+    router.push(getRoomPath(nanoid(8)));
+  }
+
+  function joinRoom() {
+    const normalizedRoomCode = roomCode.trim();
+    if (!normalizedRoomCode) {
+      return;
+    }
+    router.push(getRoomPath(normalizedRoomCode));
   }
 
   return (
-    <main className="page-shell">
-      <section className="home-hero panel">
-        <div>
+    <main className="page-shell landing-shell">
+      <section aria-label="Draw Battle introduction" className="home-hero">
+        <div className="hero-copy-block">
           <p className="eyebrow">
             <DoodleDecoration type="pencil" size={20} style={{ marginRight: 6, verticalAlign: "middle" }} />
             Quick Draw multiplayer
           </p>
-          <h1>Draw fast. Get recognized. Beat the clock.</h1>
+          <h1>
+            <span>Draw</span>
+            <span className="hero-battle-line">
+              Battle<span className="hero-bang">!</span>
+              <span className="hero-burst" aria-hidden="true" />
+            </span>
+          </h1>
           <p className="hero-copy">
-            Invite a friend into a shared room and race through AI-recognized doodle prompts
-            before the 90-second timer runs out.
+            Real-time multiplayer drawing rooms. Set the timer, pick how many people can join, share the link,
+            and race through <span className="highlight">Quick Draw prompts</span>{" "}
+            while a model tries to guess what you&apos;re scribbling.
           </p>
-          <DoodleDecoration
-            type="squiggle"
-            size={80}
-            color="#e88e8e"
-            style={{ marginTop: 16, display: "block" }}
-          />
+          <ul className="feature-list">
+            {landingFeatures.map((feature) => (
+              <li key={feature}>
+                <span className="feature-check" aria-hidden="true" />
+                {feature}
+              </li>
+            ))}
+          </ul>
         </div>
 
-        <div className="start-card">
-          <label htmlFor="player-name">
-            <DoodleDecoration type="arrow" size={22} color="#1a1a1a" rotate={-10} style={{ marginRight: 4, verticalAlign: "middle" }} />
-            Your name
-          </label>
-          <input
-            id="player-name"
-            maxLength={24}
-            onChange={(event) => setPlayerName(event.target.value)}
-            placeholder="Picasso Jr."
-            value={playerName}
-          />
-          <button className="button" onClick={createRoom} type="button">
-            <DoodleDecoration type="star" size={20} color="#1a1a1a" style={{ marginRight: 6 }} />
-            Start doodling!
-          </button>
-          <p className="muted">Share the room link with a friend. First to sketch more wins!</p>
-        </div>
+        <aside aria-label="Start a room" className="start-card">
+          <form
+            className="start-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              createRoom();
+            }}
+          >
+            <div className="start-card-heading">
+              <h2>Start a room</h2>
+              <p>Takes about 4 seconds.</p>
+            </div>
+            <label className="name-label" htmlFor="player-name">
+              Your name
+            </label>
+            <input
+              id="player-name"
+              maxLength={24}
+              onChange={(event) => setPlayerName(event.target.value)}
+              placeholder="e.g. Mira"
+              value={playerName}
+            />
+            <button className="button" type="submit">
+              <DoodleDecoration type="star" size={20} color="#1a1a1a" style={{ marginRight: 6 }} />
+              Create room
+            </button>
+          </form>
+          <details className="join-room">
+            <summary>or join with a code</summary>
+            <form
+              className="join-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                joinRoom();
+              }}
+            >
+              <label className="sr-only" htmlFor="room-code">
+                Room code
+              </label>
+              <input
+                id="room-code"
+                maxLength={32}
+                onChange={(event) => setRoomCode(event.target.value)}
+                placeholder="room-code"
+                value={roomCode}
+              />
+              <button className="button secondary" disabled={!roomCode.trim()} type="submit">
+                Join
+              </button>
+            </form>
+          </details>
+          <div className="sound-row">
+            <span>Lobby music</span>
+            <SoundToggle />
+          </div>
+        </aside>
+
+      </section>
+
+      <section aria-label="Try the recognizer" className="recognizer-card panel">
+        <LandingDemoCanvas />
       </section>
     </main>
   );

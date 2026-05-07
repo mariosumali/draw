@@ -4,34 +4,50 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { DoodleDecoration } from "@/components/ui/DoodleDecoration";
 import { SketchyBorder } from "@/components/ui/SketchyBorder";
-import { isRecognizedPrompt, type Prediction } from "@/lib/game/types";
+import { isMatchingPrediction } from "@/lib/game/guesses";
+import { startDrawingSound, stopDrawingSound } from "@/lib/audio/sfx";
+import { type AnimatedGuessSnapshot, useAnimatedGuesses } from "@/hooks/useAnimatedGuesses";
+import { type DrawingSnapshot, type Prediction } from "@/lib/game/types";
 
 type DrawCanvasProps = {
   disabled: boolean;
   prompt: string | undefined;
+  promptId: string | undefined;
   classify: (canvas: HTMLCanvasElement) => Promise<Prediction[]>;
   onPredictions: (predictions: Prediction[]) => void;
-  onRecognized: (predictions: Prediction[]) => void;
+  onGuessStateChange?: (guessState: AnimatedGuessSnapshot) => void;
+  onRecognized: (drawing: DrawingSnapshot) => void;
+  onSketchChange?: (drawing: DrawingSnapshot) => void;
+  onSketchClear?: (drawingId: string) => void;
 };
 
 const CANVAS_WIDTH = 720;
 const CANVAS_HEIGHT = 520;
+const INK_LINE_WIDTH = 12.6;
 
 export function DrawCanvas({
   disabled,
   prompt,
+  promptId,
   classify,
   onPredictions,
+  onGuessStateChange,
   onRecognized,
+  onSketchChange,
+  onSketchClear,
 }: DrawCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
   const pendingInferenceRef = useRef(false);
+  const queuedFinalInferenceRef = useRef(false);
   const inferenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recognizedGuessRef = useRef<string | null>(null);
   const historyRef = useRef<ImageData[]>([]);
   const [hasInk, setHasInk] = useState(false);
+  const [rawPredictions, setRawPredictions] = useState<Prediction[]>([]);
+  const guessState = useAnimatedGuesses(rawPredictions, { resetKey: promptId ?? prompt });
 
-  const clearCanvas = useCallback(() => {
+  const clearCanvas = useCallback((options: { notifyClear?: boolean } = {}) => {
     const canvas = canvasRef.current;
     const context = canvas?.getContext("2d", { willReadFrequently: true });
     if (!canvas || !context) {
@@ -41,58 +57,125 @@ export function DrawCanvas({
     context.fillStyle = "white";
     context.fillRect(0, 0, canvas.width, canvas.height);
     historyRef.current = [];
+    recognizedGuessRef.current = null;
     setHasInk(false);
+    setRawPredictions([]);
     onPredictions([]);
-  }, [onPredictions]);
+    if (options.notifyClear !== false && promptId) {
+      onSketchClear?.(promptId);
+    }
+  }, [onPredictions, onSketchClear, promptId]);
 
   useEffect(() => {
-    clearCanvas();
+    clearCanvas({ notifyClear: false });
   }, [clearCanvas, prompt]);
 
   useEffect(() => {
+    onPredictions(guessState.visiblePredictions);
+    onGuessStateChange?.(guessState);
+  }, [guessState, onGuessStateChange, onPredictions]);
+
+  useEffect(() => {
     return () => {
+      stopDrawingSound();
       if (inferenceTimerRef.current) {
         clearTimeout(inferenceTimerRef.current);
       }
     };
   }, []);
 
-  const runInference = useCallback(
-    async (finalPass = false) => {
-      const canvas = canvasRef.current;
-      if (!canvas || disabled || !prompt || pendingInferenceRef.current) {
-        return;
+  useEffect(() => {
+    if (disabled) {
+      stopDrawingSound();
+    }
+  }, [disabled]);
+
+  const saveSketch = useCallback((predictions: Prediction[] = [], recognized = false) => {
+    const canvas = canvasRef.current;
+    if (!canvas || !prompt) {
+      return null;
+    }
+
+    const drawing: DrawingSnapshot = {
+      id: promptId ?? prompt,
+      prompt,
+      imageDataUrl: canvas.toDataURL("image/png"),
+      predictions,
+      recognized,
+      savedAt: Date.now(),
+    };
+
+    onSketchChange?.(drawing);
+    return drawing;
+  }, [onSketchChange, prompt, promptId]);
+
+  useEffect(() => {
+    const activePrediction = guessState.activePrediction;
+    if (!prompt || !activePrediction || !isMatchingPrediction(prompt, activePrediction)) {
+      return;
+    }
+
+    const recognizedKey = `${promptId ?? prompt}:${guessState.signature}:${activePrediction.label}`;
+    if (recognizedGuessRef.current === recognizedKey) {
+      return;
+    }
+
+    recognizedGuessRef.current = recognizedKey;
+    const drawing = saveSketch(rawPredictions, true);
+    if (drawing) {
+      onRecognized(drawing);
+    }
+    clearCanvas({ notifyClear: false });
+  }, [
+    clearCanvas,
+    guessState.activePrediction,
+    guessState.signature,
+    onRecognized,
+    prompt,
+    promptId,
+    rawPredictions,
+    saveSketch,
+  ]);
+
+  async function runInference(finalPass = false) {
+    const canvas = canvasRef.current;
+    if (!canvas || disabled || !prompt) {
+      return;
+    }
+
+    if (pendingInferenceRef.current) {
+      queuedFinalInferenceRef.current ||= finalPass;
+      return;
+    }
+
+    pendingInferenceRef.current = true;
+    try {
+      const predictions = await classify(canvas);
+      setRawPredictions(predictions);
+    } catch {
+      if (finalPass) {
+        setRawPredictions([]);
       }
+    } finally {
+      pendingInferenceRef.current = false;
 
-      pendingInferenceRef.current = true;
-      try {
-        const predictions = await classify(canvas);
-        onPredictions(predictions);
-
-        if (isRecognizedPrompt(prompt, predictions)) {
-          onRecognized(predictions);
-          clearCanvas();
-        }
-      } catch {
-        if (finalPass) {
-          onPredictions([]);
-        }
-      } finally {
-        pendingInferenceRef.current = false;
+      if (queuedFinalInferenceRef.current) {
+        queuedFinalInferenceRef.current = false;
+        void runInference(true);
       }
-    },
-    [classify, clearCanvas, disabled, onPredictions, onRecognized, prompt],
-  );
+    }
+  }
 
-  const scheduleInference = useCallback(() => {
+  function scheduleInference() {
     if (inferenceTimerRef.current) {
       clearTimeout(inferenceTimerRef.current);
     }
 
     inferenceTimerRef.current = setTimeout(() => {
+      inferenceTimerRef.current = null;
       void runInference(false);
     }, 450);
-  }, [runInference]);
+  }
 
   function beginStroke(event: React.PointerEvent<HTMLCanvasElement>) {
     if (disabled) {
@@ -111,6 +194,7 @@ export function DrawCanvas({
     }
 
     drawingRef.current = true;
+    startDrawingSound();
     canvas.setPointerCapture(event.pointerId);
 
     const point = getCanvasPoint(canvas, event);
@@ -133,7 +217,7 @@ export function DrawCanvas({
     context.lineTo(point.x, point.y);
     context.lineCap = "round";
     context.lineJoin = "round";
-    context.lineWidth = 18;
+    context.lineWidth = INK_LINE_WIDTH;
     context.strokeStyle = "#1a1a1a";
     context.stroke();
     setHasInk(true);
@@ -146,7 +230,15 @@ export function DrawCanvas({
     }
 
     drawingRef.current = false;
-    event.currentTarget.releasePointerCapture(event.pointerId);
+    stopDrawingSound();
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    saveSketch();
+    if (inferenceTimerRef.current) {
+      clearTimeout(inferenceTimerRef.current);
+      inferenceTimerRef.current = null;
+    }
     void runInference(true);
   }
 
@@ -159,7 +251,13 @@ export function DrawCanvas({
     }
 
     context.putImageData(previous, 0, 0);
-    setHasInk(historyRef.current.length > 0);
+    const hasPreviousInk = historyRef.current.length > 0;
+    setHasInk(hasPreviousInk);
+    if (hasPreviousInk) {
+      saveSketch();
+    } else if (promptId) {
+      onSketchClear?.(promptId);
+    }
     scheduleInference();
   }
 
@@ -177,7 +275,7 @@ export function DrawCanvas({
           <button className="button secondary" disabled={disabled || !hasInk} onClick={undo} type="button">
             Undo
           </button>
-          <button className="button secondary" disabled={disabled || !hasInk} onClick={clearCanvas} type="button">
+          <button className="button secondary" disabled={disabled || !hasInk} onClick={() => clearCanvas()} type="button">
             Clear
           </button>
         </div>

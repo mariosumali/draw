@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Draw Battle mark</title>
+  <desc id="desc">A hand-drawn notebook paper badge with a pencil over colorful sketch lines.</desc>
+  <rect width="512" height="512" rx="88" fill="#fdf6e3"/>
+  <path d="M78 0v512" stroke="#e88e8e" stroke-width="4" stroke-linecap="round"/>
+  <g stroke="#c8d6e5" stroke-width="3" opacity=".8">
+    <path d="M0 93h512"/>
+    <path d="M0 157h512"/>
+    <path d="M0 221h512"/>
+    <path d="M0 285h512"/>
+    <path d="M0 349h512"/>
+    <path d="M0 413h512"/>
+  </g>
+  <g fill="none" stroke="#1a1a1a" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M119 73c94-19 209-16 285 6 29 8 50 36 45 67-14 87-8 161 5 237 5 29-15 58-44 65-92 23-199 16-285-6-29-7-49-35-45-65 12-81 12-164 0-247-4-27 13-51 39-57Z" fill="#fff9ed" stroke-width="13"/>
+    <path d="M118 188c71 13 137 12 208-6" stroke-width="10"/>
+    <path d="M116 246c56-15 105 20 161 2 50-17 91-44 141-22 18 8 31 17 51 13" stroke="#f48fb1" stroke-width="10"/>
+    <path d="M112 317c33-25 70 22 104-3 31-23 68 19 102-5 35-25 75 18 113-7" stroke="#90caf9" stroke-width="10"/>
+    <path d="M172 346 340 178l41-41 27 27-41 41-168 168-46 18 19-45Z" fill="#fff176" stroke-width="11"/>
+    <path d="m340 178 27 27" stroke-width="11"/>
+  </g>
+  <g fill="#1a1a1a">
+    <circle cx="57" cy="132" r="11"/>
+    <circle cx="57" cy="256" r="11"/>
+    <circle cx="57" cy="380" r="11"/>
+  </g>
+  <path d="M403 91 416 121l32 3-24 21 8 32-27-17-28 17 8-32-24-21 32-3 10-30Z" fill="#ffcc80" stroke="#1a1a1a" stroke-linejoin="round" stroke-width="9"/>
+</svg>

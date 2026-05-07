@@ -1,6 +1,10 @@
-export const MAX_PLAYERS = 2;
+export const MIN_PLAYERS = 2;
+export const MAX_PLAYERS = 6;
+export const DEFAULT_MAX_PLAYERS = 2;
 export const COUNTDOWN_MS = 3_000;
+export const MIN_ROUND_DURATION_MS = 45_000;
 export const ROUND_DURATION_MS = 90_000;
+export const MAX_ROUND_DURATION_MS = 180_000;
 export const RECOGNITION_CONFIDENCE = 0.72;
 export const RECOGNITION_TOP_N = 3;
 
@@ -11,10 +15,19 @@ export type Prediction = {
   confidence: number;
 };
 
+export type DrawingSnapshot = {
+  id: string;
+  prompt: string;
+  imageDataUrl: string;
+  predictions: Prediction[];
+  recognized: boolean;
+  savedAt: number;
+};
+
 export type PlayerState = {
   id: string;
   name: string;
-  slot: 0 | 1;
+  slot: number;
   ready: boolean;
   connected: boolean;
   score: number;
@@ -23,12 +36,22 @@ export type PlayerState = {
   lastSeen: number;
 };
 
+export type RoomChatMessage = {
+  id: string;
+  playerId: string;
+  playerName: string;
+  text: string;
+  sentAt: number;
+};
+
 export type GameState = {
   roomId: string;
   phase: GamePhase;
   players: PlayerState[];
   spectators: number;
+  chatMessages: RoomChatMessage[];
   prompts: string[];
+  maxPlayers: number;
   roundDurationMs: number;
   serverNow: number;
   countdownStartedAt?: number;
@@ -47,6 +70,21 @@ export type ClientMessage =
       type: "ready";
       playerId: string;
       ready: boolean;
+    }
+  | {
+      type: "updateSettings";
+      playerId: string;
+      maxPlayers?: number;
+      roundDurationMs?: number;
+    }
+  | {
+      type: "deleteLobby";
+      playerId: string;
+    }
+  | {
+      type: "sendChat";
+      playerId: string;
+      text: string;
     }
   | {
       type: "completePrompt";
@@ -70,6 +108,9 @@ export type ServerMessage =
   | {
       type: "error";
       message: string;
+    }
+  | {
+      type: "lobbyDeleted";
     };
 
 export function normalizeLabel(label: string) {

@@ -2,7 +2,7 @@ export const QUICK_DRAW_PROMPTS = [
   "apple",
   "airplane",
   "bicycle",
-  "boat",
+  "sailboat",
   "book",
   "butterfly",
   "car",

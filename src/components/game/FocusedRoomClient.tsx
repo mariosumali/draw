@@ -1,13 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import usePartySocket from "partysocket/react";
 
 import { DrawCanvas } from "@/components/game/DrawCanvas";
+import { LobbyRoster } from "@/components/game/LobbyRoster";
 import { ResultPanel } from "@/components/game/ResultPanel";
 import { DoodleDecoration } from "@/components/ui/DoodleDecoration";
+import { EMPTY_ANIMATED_GUESS_SNAPSHOT, type AnimatedGuessSnapshot } from "@/hooks/useAnimatedGuesses";
+import { isMatchingPrediction } from "@/lib/game/guesses";
 import { classifyCanvas, QuickDrawModelAssetError } from "@/lib/quickdraw/model";
-import type { ClientMessage, GameState, Prediction, ServerMessage } from "@/lib/game/types";
+import type { ClientMessage, DrawingSnapshot, GameState, Prediction, ServerMessage } from "@/lib/game/types";
 
 type FocusedRoomClientProps = {
   roomId: string;
@@ -22,10 +26,13 @@ type ReceivedGameState = {
 };
 
 export function FocusedRoomClient({ roomId, initialName }: FocusedRoomClientProps) {
+  const router = useRouter();
   const [playerId] = useState(() => getOrCreatePlayerId(roomId));
   const [playerName, setPlayerName] = useState(initialName?.slice(0, 24) || "Player");
   const [receivedGameState, setReceivedGameState] = useState<ReceivedGameState | null>(null);
   const [predictions, setPredictions] = useState<Prediction[]>([]);
+  const [guessState, setGuessState] = useState<AnimatedGuessSnapshot>(EMPTY_ANIMATED_GUESS_SNAPSHOT);
+  const [drawings, setDrawings] = useState<DrawingSnapshot[]>([]);
   const [modelError, setModelError] = useState<string | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -38,6 +45,14 @@ export function FocusedRoomClient({ roomId, initialName }: FocusedRoomClientProp
       if (message.type === "state") {
         setReceivedGameState({ state: message.state, receivedAt: Date.now() });
         setLastError(null);
+        if (message.state.phase === "waiting") {
+          setDrawings([]);
+          setPredictions([]);
+          setGuessState(EMPTY_ANIMATED_GUESS_SNAPSHOT);
+        }
+      } else if (message.type === "lobbyDeleted") {
+        clearPlayerId(roomId);
+        router.replace("/");
       } else {
         setLastError(message.message);
       }
@@ -65,9 +80,29 @@ export function FocusedRoomClient({ roomId, initialName }: FocusedRoomClientProp
   }, [gameState?.players, playerId]);
 
   const currentPrompt = localPlayer ? gameState?.prompts[localPlayer.promptIndex] : undefined;
-  const opponent = gameState?.players.find((p) => p.id !== playerId);
+  const connectedPlayers = gameState?.players.filter((p) => p.connected) ?? [];
+  const readyPlayers = connectedPlayers.filter((p) => p.ready);
+  const opponent = connectedPlayers.find((p) => p.id !== playerId);
   const inviteUrl = typeof window === "undefined" ? "" : window.location.href.split("?")[0];
   const canDraw = gameState?.phase === "playing" && Boolean(currentPrompt) && !modelError;
+  const currentPromptId = localPlayer && currentPrompt ? `${localPlayer.promptIndex}:${currentPrompt}` : undefined;
+
+  const saveDrawing = useCallback((drawing: DrawingSnapshot) => {
+    setDrawings((currentDrawings) => {
+      const existingIndex = currentDrawings.findIndex((currentDrawing) => currentDrawing.id === drawing.id);
+      if (existingIndex === -1) {
+        return [...currentDrawings, drawing];
+      }
+
+      const nextDrawings = [...currentDrawings];
+      nextDrawings[existingIndex] = drawing;
+      return nextDrawings;
+    });
+  }, []);
+
+  const removeDrawing = useCallback((drawingId: string) => {
+    setDrawings((currentDrawings) => currentDrawings.filter((drawing) => drawing.id !== drawingId));
+  }, []);
 
   const classify = useCallback(async (canvas: HTMLCanvasElement) => {
     try {
@@ -84,17 +119,19 @@ export function FocusedRoomClient({ roomId, initialName }: FocusedRoomClientProp
   }, []);
 
   const completePrompt = useCallback(
-    (recognizedPredictions: Prediction[]) => {
+    (drawing: DrawingSnapshot) => {
       if (!playerId || !currentPrompt) return;
+      saveDrawing(drawing);
+      const matchedPrediction = drawing.predictions.find((prediction) => isMatchingPrediction(currentPrompt, prediction));
       sendMessage({
         type: "completePrompt",
         playerId,
         prompt: currentPrompt,
-        confidence: recognizedPredictions[0]?.confidence ?? 0,
-        predictions: recognizedPredictions,
+        confidence: matchedPrediction?.confidence ?? drawing.predictions[0]?.confidence ?? 0,
+        predictions: drawing.predictions,
       });
     },
-    [currentPrompt, playerId, sendMessage],
+    [currentPrompt, playerId, saveDrawing, sendMessage],
   );
 
   function toggleReady() {
@@ -105,6 +142,8 @@ export function FocusedRoomClient({ roomId, initialName }: FocusedRoomClientProp
   function resetRound() {
     if (!playerId) return;
     setPredictions([]);
+    setGuessState(EMPTY_ANIMATED_GUESS_SNAPSHOT);
+    setDrawings([]);
     sendMessage({ type: "reset", playerId });
   }
 
@@ -119,7 +158,7 @@ export function FocusedRoomClient({ roomId, initialName }: FocusedRoomClientProp
       <main className="focused-shell">
         <div className="focused-loading">
           <DoodleDecoration type="pencil" size={32} />
-          <span>Sharpening pencils...</span>
+          <span>Connecting...</span>
         </div>
       </main>
     );
@@ -161,23 +200,33 @@ export function FocusedRoomClient({ roomId, initialName }: FocusedRoomClientProp
 
       {/* Pre-game: waiting/ready */}
       {isWaiting && (
-        <div className="focused-waiting">
-          <p>
-            {!opponent
-              ? "Share your invite link to start!"
-              : localPlayer?.ready
-                ? "Waiting for opponent..."
-                : "Ready to sketch?"}
-          </p>
-          <button
-            className="button"
-            disabled={!localPlayer}
-            onClick={toggleReady}
-            type="button"
-          >
-            {localPlayer?.ready ? "Unready" : "Ready!"}
-          </button>
-        </div>
+        <section className="focused-lobby" aria-label="Lobby status">
+          <div className="focused-waiting">
+            <div>
+              <strong>
+                {connectedPlayers.length < gameState.maxPlayers
+                  ? "Waiting for players"
+                  : localPlayer?.ready
+                    ? "Ready. Waiting for others."
+                    : "Ready to start?"}
+              </strong>
+              <p>
+                {connectedPlayers.length < gameState.maxPlayers
+                  ? `${gameState.maxPlayers - connectedPlayers.length} open seat${gameState.maxPlayers - connectedPlayers.length === 1 ? "" : "s"} left.`
+                  : `${readyPlayers.length}/${connectedPlayers.length} player${connectedPlayers.length === 1 ? "" : "s"} ready.`}
+              </p>
+            </div>
+            <button
+              className="button"
+              disabled={!localPlayer || connectedPlayers.length < gameState.maxPlayers}
+              onClick={toggleReady}
+              type="button"
+            >
+              {localPlayer?.ready ? "Unready" : "Ready"}
+            </button>
+          </div>
+          <LobbyRoster compact players={gameState.players} maxPlayers={gameState.maxPlayers} localPlayerId={playerId} />
+        </section>
       )}
 
       {/* Countdown overlay */}
@@ -196,25 +245,34 @@ export function FocusedRoomClient({ roomId, initialName }: FocusedRoomClientProp
         <DrawCanvas
           classify={classify}
           disabled={!canDraw}
+          onGuessStateChange={setGuessState}
           onPredictions={setPredictions}
+          onSketchChange={saveDrawing}
+          onSketchClear={removeDrawing}
           onRecognized={completePrompt}
           prompt={currentPrompt}
+          promptId={currentPromptId}
         />
       </div>
 
       {/* Bottom bar: AI guesses as inline pills */}
-      {predictions.length > 0 && (
+      {(guessState.status === "thinking" || predictions.length > 0) && (
         <div className="focused-guesses">
-          <span className="focused-guesses-label">AI thinks:</span>
+          <span className="focused-guesses-label">
+            {guessState.status === "thinking" ? "AI is thinking..." : "AI thinks:"}
+          </span>
           {predictions.slice(0, 3).map((p) => (
-            <span key={p.label} className="focused-guess-pill">
+            <span
+              key={p.label}
+              className={`focused-guess-pill ${guessState.activePrediction?.label === p.label ? "active" : ""}`}
+            >
               {p.label} <strong>{Math.round(p.confidence * 100)}%</strong>
             </span>
           ))}
         </div>
       )}
 
-      <ResultPanel localPlayer={localPlayer} onReset={resetRound} state={gameState} />
+      <ResultPanel drawings={drawings} localPlayer={localPlayer} onReset={resetRound} state={gameState} />
     </main>
   );
 }
@@ -272,4 +330,9 @@ function getOrCreatePlayerId(roomId: string) {
   const nextId = existingId ?? window.crypto.randomUUID();
   window.sessionStorage.setItem(storageKey, nextId);
   return nextId;
+}
+
+function clearPlayerId(roomId: string) {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.removeItem(`draw-battle:${roomId}:player-id`);
 }

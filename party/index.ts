@@ -3,7 +3,11 @@ import type * as Party from "partykit/server";
 import { createPromptDeck } from "../src/lib/game/prompts";
 import {
   COUNTDOWN_MS,
+  DEFAULT_MAX_PLAYERS,
   MAX_PLAYERS,
+  MIN_PLAYERS,
+  MAX_ROUND_DURATION_MS,
+  MIN_ROUND_DURATION_MS,
   ROUND_DURATION_MS,
   getWinnerId,
   isRecognizedPrompt,
@@ -61,6 +65,21 @@ export default class DrawBattleRoom implements Party.Server {
       return;
     }
 
+    if (message.type === "updateSettings") {
+      this.updateSettings(message);
+      return;
+    }
+
+    if (message.type === "deleteLobby") {
+      this.deleteLobby();
+      return;
+    }
+
+    if (message.type === "sendChat") {
+      this.sendChat(message);
+      return;
+    }
+
     if (message.type === "completePrompt") {
       this.completePrompt(message);
       return;
@@ -92,7 +111,7 @@ export default class DrawBattleRoom implements Party.Server {
       return;
     }
 
-    if (this.state.players.length >= MAX_PLAYERS || this.state.phase !== "waiting") {
+    if (this.state.players.length >= this.state.maxPlayers || this.state.phase !== "waiting") {
       connection.setState({ spectator: true });
       this.send(connection, {
         type: "state",
@@ -106,7 +125,7 @@ export default class DrawBattleRoom implements Party.Server {
     const player: PlayerState = {
       id: playerId,
       name,
-      slot: this.state.players.length as 0 | 1,
+      slot: this.state.players.length,
       ready: false,
       connected: true,
       score: 0,
@@ -134,13 +153,92 @@ export default class DrawBattleRoom implements Party.Server {
     player.lastSeen = Date.now();
     this.broadcastState();
 
+    const connectedPlayers = this.state.players.filter((candidate) => candidate.connected);
     const canStart =
-      this.state.players.length === MAX_PLAYERS &&
-      this.state.players.every((candidate) => candidate.ready && candidate.connected);
+      connectedPlayers.length === this.state.maxPlayers &&
+      connectedPlayers.every((candidate) => candidate.ready);
 
     if (canStart) {
       this.startCountdown();
     }
+  }
+
+  private updateSettings(message: Extract<ClientMessage, { type: "updateSettings" }>) {
+    if (this.state.phase !== "waiting") {
+      return;
+    }
+
+    const player = this.state.players.find((candidate) => candidate.id === message.playerId);
+    if (!player || !player.connected) {
+      return;
+    }
+
+    let changed = false;
+    if (typeof message.maxPlayers === "number") {
+      const minimumPlayers = Math.max(MIN_PLAYERS, this.state.players.length);
+      const maxPlayers = clamp(Math.round(message.maxPlayers), minimumPlayers, MAX_PLAYERS);
+      if (maxPlayers !== this.state.maxPlayers) {
+        this.state.maxPlayers = maxPlayers;
+        changed = true;
+      }
+    }
+
+    if (typeof message.roundDurationMs === "number") {
+      const roundDurationMs = clamp(
+        Math.round(message.roundDurationMs),
+        MIN_ROUND_DURATION_MS,
+        MAX_ROUND_DURATION_MS,
+      );
+      if (roundDurationMs !== this.state.roundDurationMs) {
+        this.state.roundDurationMs = roundDurationMs;
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      this.state.players.forEach((candidate) => {
+        candidate.ready = false;
+      });
+      this.broadcastState();
+    }
+  }
+
+  private deleteLobby() {
+    if (this.state.phase !== "waiting") {
+      return;
+    }
+
+    this.clearTimers();
+    this.state = this.createInitialState();
+
+    for (const connection of this.room.getConnections<ConnectionState>()) {
+      connection.setState({ spectator: true });
+    }
+
+    const message: ServerMessage = { type: "lobbyDeleted" };
+    this.room.broadcast(JSON.stringify(message));
+  }
+
+  private sendChat(message: Extract<ClientMessage, { type: "sendChat" }>) {
+    const player = this.state.players.find((candidate) => candidate.id === message.playerId);
+    const text = message.text.trim().replace(/\s+/g, " ").slice(0, 180);
+    if (!player || !text) {
+      return;
+    }
+
+    const sentAt = Date.now();
+    this.state.chatMessages = [
+      ...this.state.chatMessages,
+      {
+        id: `${sentAt}-${message.playerId}-${this.state.chatMessages.length}`,
+        playerId: message.playerId,
+        playerName: player.name,
+        text,
+        sentAt,
+      },
+    ].slice(-50);
+    player.lastSeen = sentAt;
+    this.broadcastState();
   }
 
   private completePrompt(message: Extract<ClientMessage, { type: "completePrompt" }>) {
@@ -192,12 +290,12 @@ export default class DrawBattleRoom implements Party.Server {
     const now = Date.now();
     this.state.phase = "playing";
     this.state.startedAt = now;
-    this.state.endsAt = now + ROUND_DURATION_MS;
+    this.state.endsAt = now + this.state.roundDurationMs;
     this.broadcastState();
 
     this.finishTimer = setTimeout(() => {
       this.finishRound();
-    }, ROUND_DURATION_MS);
+    }, this.state.roundDurationMs);
   }
 
   private finishRound() {
@@ -213,11 +311,18 @@ export default class DrawBattleRoom implements Party.Server {
 
   private resetRoom() {
     this.clearTimers();
-    this.state = this.createInitialState();
-
-    for (const connection of this.room.getConnections<ConnectionState>()) {
-      connection.setState({ spectator: true });
-    }
+    const previousPlayers = this.state.players;
+    const { maxPlayers, roundDurationMs } = this.state;
+    this.state = this.createInitialState({ maxPlayers, roundDurationMs });
+    this.state.players = previousPlayers.map((player, slot) => ({
+      ...player,
+      slot,
+      ready: false,
+      score: 0,
+      promptIndex: 0,
+      completedPrompts: [],
+      lastSeen: Date.now(),
+    }));
 
     this.broadcastState();
   }
@@ -243,6 +348,15 @@ export default class DrawBattleRoom implements Party.Server {
       this.clearTimers();
     }
 
+    if (this.state.phase === "waiting") {
+      this.state.players = this.state.players.filter((candidate) => candidate.connected);
+      this.state.players.forEach((candidate, slot) => {
+        candidate.slot = slot;
+        candidate.ready = false;
+        candidate.lastSeen = Date.now();
+      });
+    }
+
     this.broadcastState();
   }
 
@@ -250,14 +364,16 @@ export default class DrawBattleRoom implements Party.Server {
     return connection.state?.playerId === playerId && connection.state?.spectator === false;
   }
 
-  private createInitialState(): GameState {
+  private createInitialState(settings?: Pick<GameState, "maxPlayers" | "roundDurationMs">): GameState {
     return {
       roomId: this.room.id,
       phase: "waiting",
       players: [],
       spectators: 0,
+      chatMessages: [],
       prompts: createPromptDeck(`${this.room.id}-${Date.now()}`),
-      roundDurationMs: ROUND_DURATION_MS,
+      maxPlayers: settings?.maxPlayers ?? DEFAULT_MAX_PLAYERS,
+      roundDurationMs: settings?.roundDurationMs ?? ROUND_DURATION_MS,
       serverNow: Date.now(),
     };
   }
@@ -266,6 +382,7 @@ export default class DrawBattleRoom implements Party.Server {
     return {
       ...this.state,
       players: this.state.players.map((player) => ({ ...player })),
+      chatMessages: this.state.chatMessages.map((message) => ({ ...message })),
       spectators: this.countSpectators(),
       serverNow: Date.now(),
     };
@@ -300,4 +417,8 @@ export default class DrawBattleRoom implements Party.Server {
     this.countdownTimer = undefined;
     this.finishTimer = undefined;
   }
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }

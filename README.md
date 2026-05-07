@@ -37,7 +37,7 @@ Add the model weight shards beside `model.json`. `classes.json` must list labels
 
 The drawing pipeline crops the ink, centers it, rescales it to 28x28 grayscale, and feeds a `1 x 28 x 28 x 1` tensor into the model. Recognition scores when the current prompt is in the top three predictions with at least 72% confidence.
 
-Known candidate: DoodleNet is a 345-class Quick Draw CNN converted to TensorFlow.js. Confirm the model license before committing its weights.
+To train a stronger game-specific model from the official Google QuickDraw dataset, use the pipeline in `ml/`. The dataset is published by Google under CC BY 4.0, so keep attribution with any exported model assets.
 
 ## Scripts
 

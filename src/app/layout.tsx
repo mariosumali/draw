@@ -3,6 +3,11 @@ import { Caveat, Patrick_Hand, Kalam } from "next/font/google";
 
 import "./globals.css";
 
+const description = "Grab a pencil and race your friend through 90-second Quick Draw battles!";
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+
 const caveat = Caveat({
   variable: "--font-heading",
   subsets: ["latin"],
@@ -22,8 +27,39 @@ const kalam = Kalam({
 });
 
 export const metadata: Metadata = {
-  title: "Draw Battle!",
-  description: "Grab a pencil and race your friend to doodle AI-recognized sketches!",
+  metadataBase: new URL(siteUrl),
+  applicationName: "Draw Battle!",
+  title: {
+    default: "Draw Battle!",
+    template: "%s | Draw Battle!",
+  },
+  description,
+  keywords: ["drawing game", "quick draw", "multiplayer drawing", "AI sketch recognition"],
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    shortcut: ["/icon.svg"],
+  },
+  openGraph: {
+    type: "website",
+    siteName: "Draw Battle!",
+    title: "Draw Battle!",
+    description,
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "Draw Battle! Quick Draw multiplayer social card.",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Draw Battle!",
+    description,
+    images: ["/twitter-image"],
+  },
 };
 
 export default function RootLayout({

@@ -3,6 +3,7 @@ const STORAGE_KEY = "draw-battle:sound-muted";
 let ctx: AudioContext | null = null;
 let masterGain: GainNode | null = null;
 let muted = false;
+const listeners = new Set<() => void>();
 
 if (typeof window !== "undefined") {
   muted = window.localStorage.getItem(STORAGE_KEY) === "1";
@@ -38,6 +39,7 @@ export const SoundEngine = {
     if (typeof window !== "undefined") {
       window.localStorage.setItem(STORAGE_KEY, "1");
     }
+    emitMutedChange();
   },
 
   unmute() {
@@ -46,6 +48,7 @@ export const SoundEngine = {
     if (typeof window !== "undefined") {
       window.localStorage.setItem(STORAGE_KEY, "0");
     }
+    emitMutedChange();
   },
 
   toggle() {
@@ -60,4 +63,17 @@ export const SoundEngine = {
   isMuted() {
     return muted;
   },
+
+  subscribe(listener: () => void) {
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  },
 };
+
+function emitMutedChange() {
+  listeners.forEach((listener) => {
+    listener();
+  });
+}

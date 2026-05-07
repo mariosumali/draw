@@ -12,6 +12,13 @@ const C6 = 1046.5;
 
 type OscType = OscillatorType;
 
+const DRAWING_SOUND_VOLUME = 0.22;
+
+let drawingScratchBuffer: AudioBuffer | null = null;
+let drawingSource: AudioBufferSourceNode | null = null;
+let drawingGain: GainNode | null = null;
+let drawingFilter: BiquadFilterNode | null = null;
+
 function tone(
   freq: number,
   duration: number,
@@ -48,6 +55,85 @@ function chord(
   for (const freq of freqs) {
     tone(freq, duration, type, volume, startDelay);
   }
+}
+
+function getDrawingScratchBuffer(ctx: AudioContext) {
+  if (drawingScratchBuffer) {
+    return drawingScratchBuffer;
+  }
+
+  const bufferSize = Math.floor(ctx.sampleRate * 0.24);
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+
+  for (let i = 0; i < bufferSize; i++) {
+    const scrapePattern = 0.45 + Math.abs(Math.sin(i * 0.018)) * 0.55;
+    const grain = Math.random() * 2 - 1;
+    const roughEdge = Math.random() > 0.86 ? Math.random() * 2 - 1 : 0;
+    data[i] = (grain * 0.4 + roughEdge * 0.6) * scrapePattern;
+  }
+
+  drawingScratchBuffer = buffer;
+  return buffer;
+}
+
+export function startDrawingSound() {
+  if (drawingSource) {
+    return;
+  }
+
+  const ctx = SoundEngine.getContext();
+  const master = SoundEngine.getMasterGain();
+  const now = ctx.currentTime;
+
+  const source = ctx.createBufferSource();
+  source.buffer = getDrawingScratchBuffer(ctx);
+  source.loop = true;
+  source.playbackRate.value = 0.95 + Math.random() * 0.12;
+
+  const filter = ctx.createBiquadFilter();
+  filter.type = "bandpass";
+  filter.frequency.value = 1450;
+  filter.Q.value = 0.85;
+
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.001, now);
+  gain.gain.exponentialRampToValueAtTime(DRAWING_SOUND_VOLUME, now + 0.035);
+
+  source.connect(filter);
+  filter.connect(gain);
+  gain.connect(master);
+
+  drawingSource = source;
+  drawingGain = gain;
+  drawingFilter = filter;
+
+  source.start(now);
+}
+
+export function stopDrawingSound() {
+  if (!drawingSource || !drawingGain || !drawingFilter) {
+    return;
+  }
+
+  const ctx = SoundEngine.getContext();
+  const source = drawingSource;
+  const gain = drawingGain;
+  const filter = drawingFilter;
+  const now = ctx.currentTime;
+
+  drawingSource = null;
+  drawingGain = null;
+  drawingFilter = null;
+
+  gain.gain.cancelScheduledValues(now);
+  gain.gain.setTargetAtTime(0.001, now, 0.018);
+  source.stop(now + 0.09);
+  source.onended = () => {
+    source.disconnect();
+    filter.disconnect();
+    gain.disconnect();
+  };
 }
 
 export function playClick() {

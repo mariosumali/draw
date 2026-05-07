@@ -1,15 +1,14 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 import { SoundEngine } from "@/lib/audio/sound-engine";
 
 export function SoundToggle() {
-  const [muted, setMuted] = useState(() => SoundEngine.isMuted());
+  const muted = useSyncExternalStore(SoundEngine.subscribe, SoundEngine.isMuted, () => false);
 
   const toggle = useCallback(() => {
-    const nowMuted = !SoundEngine.toggle();
-    setMuted(nowMuted);
+    SoundEngine.toggle();
   }, []);
 
   return (

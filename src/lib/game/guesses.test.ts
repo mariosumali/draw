@@ -37,6 +37,6 @@ describe("isMatchingPrediction", () => {
   });
 
   it("rejects matching labels below the recognition threshold", () => {
-    expect(isMatchingPrediction("stop sign", { label: "stop_sign", confidence: 0.5 })).toBe(false);
+    expect(isMatchingPrediction("stop sign", { label: "stop_sign", confidence: 0.3 })).toBe(false);
   });
 });

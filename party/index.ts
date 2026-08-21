@@ -85,6 +85,11 @@ export default class DrawBattleRoom implements Party.Server {
       return;
     }
 
+    if (message.type === "skipPrompt") {
+      this.skipPrompt(message);
+      return;
+    }
+
     if (message.type === "reset") {
       this.resetRoom();
     }
@@ -265,6 +270,26 @@ export default class DrawBattleRoom implements Party.Server {
     player.promptIndex += 1;
     player.lastSeen = Date.now();
 
+    this.broadcastState();
+  }
+
+  private skipPrompt(message: Extract<ClientMessage, { type: "skipPrompt" }>) {
+    if (this.state.phase !== "playing") {
+      return;
+    }
+
+    const player = this.state.players.find((candidate) => candidate.id === message.playerId);
+    if (!player) {
+      return;
+    }
+
+    const currentPrompt = this.state.prompts[player.promptIndex];
+    if (!currentPrompt || currentPrompt !== message.prompt) {
+      return;
+    }
+
+    player.promptIndex += 1;
+    player.lastSeen = Date.now();
     this.broadcastState();
   }
 

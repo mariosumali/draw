@@ -12,12 +12,14 @@ const C6 = 1046.5;
 
 type OscType = OscillatorType;
 
-const DRAWING_SOUND_VOLUME = 0.22;
+const DRAWING_SOUND_IDLE_MS = 85;
+const DRAWING_SOUND_VOLUME = 0.08;
 
 let drawingScratchBuffer: AudioBuffer | null = null;
 let drawingSource: AudioBufferSourceNode | null = null;
 let drawingGain: GainNode | null = null;
 let drawingFilter: BiquadFilterNode | null = null;
+let drawingIdleTimer: ReturnType<typeof setTimeout> | null = null;
 
 function tone(
   freq: number,
@@ -62,15 +64,15 @@ function getDrawingScratchBuffer(ctx: AudioContext) {
     return drawingScratchBuffer;
   }
 
-  const bufferSize = Math.floor(ctx.sampleRate * 0.24);
+  const bufferSize = Math.floor(ctx.sampleRate * 0.28);
   const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
   const data = buffer.getChannelData(0);
 
   for (let i = 0; i < bufferSize; i++) {
-    const scrapePattern = 0.45 + Math.abs(Math.sin(i * 0.018)) * 0.55;
+    const scrapePattern = 0.25 + Math.abs(Math.sin(i * 0.014)) * 0.3;
     const grain = Math.random() * 2 - 1;
-    const roughEdge = Math.random() > 0.86 ? Math.random() * 2 - 1 : 0;
-    data[i] = (grain * 0.4 + roughEdge * 0.6) * scrapePattern;
+    const roughEdge = Math.random() > 0.94 ? Math.random() * 2 - 1 : 0;
+    data[i] = (grain * 0.28 + roughEdge * 0.18) * scrapePattern;
   }
 
   drawingScratchBuffer = buffer;
@@ -93,12 +95,12 @@ export function startDrawingSound() {
 
   const filter = ctx.createBiquadFilter();
   filter.type = "bandpass";
-  filter.frequency.value = 1450;
-  filter.Q.value = 0.85;
+  filter.frequency.value = 900;
+  filter.Q.value = 0.5;
 
   const gain = ctx.createGain();
   gain.gain.setValueAtTime(0.001, now);
-  gain.gain.exponentialRampToValueAtTime(DRAWING_SOUND_VOLUME, now + 0.035);
+  gain.gain.exponentialRampToValueAtTime(DRAWING_SOUND_VOLUME, now + 0.06);
 
   source.connect(filter);
   filter.connect(gain);
@@ -111,7 +113,24 @@ export function startDrawingSound() {
   source.start(now);
 }
 
+export function playDrawingMovementSound() {
+  if (drawingIdleTimer) {
+    clearTimeout(drawingIdleTimer);
+  }
+
+  startDrawingSound();
+  drawingIdleTimer = setTimeout(() => {
+    drawingIdleTimer = null;
+    stopDrawingSound();
+  }, DRAWING_SOUND_IDLE_MS);
+}
+
 export function stopDrawingSound() {
+  if (drawingIdleTimer) {
+    clearTimeout(drawingIdleTimer);
+    drawingIdleTimer = null;
+  }
+
   if (!drawingSource || !drawingGain || !drawingFilter) {
     return;
   }
@@ -127,8 +146,8 @@ export function stopDrawingSound() {
   drawingFilter = null;
 
   gain.gain.cancelScheduledValues(now);
-  gain.gain.setTargetAtTime(0.001, now, 0.018);
-  source.stop(now + 0.09);
+  gain.gain.setTargetAtTime(0.001, now, 0.03);
+  source.stop(now + 0.12);
   source.onended = () => {
     source.disconnect();
     filter.disconnect();

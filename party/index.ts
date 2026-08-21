@@ -1,6 +1,7 @@
 import type * as Party from "partykit/server";
 
 import { createPromptDeck } from "../src/lib/game/prompts";
+import { DEFAULT_GAME_MODE, isGameMode, scorePrompt } from "../src/lib/game/modes";
 import {
   COUNTDOWN_MS,
   DEFAULT_MAX_PLAYERS,
@@ -9,8 +10,10 @@ import {
   MAX_ROUND_DURATION_MS,
   MIN_ROUND_DURATION_MS,
   ROUND_DURATION_MS,
+  RECOGNITION_TOP_N,
   getWinnerId,
   isRecognizedPrompt,
+  normalizeLabel,
   type ClientMessage,
   type GameState,
   type PlayerState,
@@ -200,6 +203,11 @@ export default class DrawBattleRoom implements Party.Server {
       }
     }
 
+    if (isGameMode(message.mode) && message.mode !== this.state.mode) {
+      this.state.mode = message.mode;
+      changed = true;
+    }
+
     if (changed) {
       this.state.players.forEach((candidate) => {
         candidate.ready = false;
@@ -265,7 +273,17 @@ export default class DrawBattleRoom implements Party.Server {
       return;
     }
 
-    player.score += 1;
+    const normalizedPrompt = normalizeLabel(currentPrompt);
+    const matchedPrediction = message.predictions
+      .slice(0, RECOGNITION_TOP_N)
+      .find((prediction) => normalizeLabel(prediction.label) === normalizedPrompt);
+    const award = scorePrompt(this.state.mode, {
+      confidence: matchedPrediction?.confidence ?? 0,
+      strokeCount: message.strokeCount ?? 99,
+      misdirected: Boolean(message.misdirected),
+    });
+
+    player.score += award;
     player.completedPrompts.push(currentPrompt);
     player.promptIndex += 1;
     player.lastSeen = Date.now();
@@ -337,8 +355,8 @@ export default class DrawBattleRoom implements Party.Server {
   private resetRoom() {
     this.clearTimers();
     const previousPlayers = this.state.players;
-    const { maxPlayers, roundDurationMs } = this.state;
-    this.state = this.createInitialState({ maxPlayers, roundDurationMs });
+    const { maxPlayers, mode, roundDurationMs } = this.state;
+    this.state = this.createInitialState({ maxPlayers, mode, roundDurationMs });
     this.state.players = previousPlayers.map((player, slot) => ({
       ...player,
       slot,
@@ -389,7 +407,7 @@ export default class DrawBattleRoom implements Party.Server {
     return connection.state?.playerId === playerId && connection.state?.spectator === false;
   }
 
-  private createInitialState(settings?: Pick<GameState, "maxPlayers" | "roundDurationMs">): GameState {
+  private createInitialState(settings?: Pick<GameState, "maxPlayers" | "mode" | "roundDurationMs">): GameState {
     return {
       roomId: this.room.id,
       phase: "waiting",
@@ -397,6 +415,7 @@ export default class DrawBattleRoom implements Party.Server {
       spectators: 0,
       chatMessages: [],
       prompts: createPromptDeck(`${this.room.id}-${Date.now()}`),
+      mode: settings?.mode ?? DEFAULT_GAME_MODE,
       maxPlayers: settings?.maxPlayers ?? DEFAULT_MAX_PLAYERS,
       roundDurationMs: settings?.roundDurationMs ?? ROUND_DURATION_MS,
       serverNow: Date.now(),

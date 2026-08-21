@@ -1,0 +1,4 @@
+*.bin binary
+*.onnx binary
+*.tflite binary
+*.wasm binary

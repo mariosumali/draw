@@ -1,6 +1,7 @@
 "use client";
 
 import { DoodleDecoration } from "@/components/ui/DoodleDecoration";
+import { isMatchingPrediction } from "@/lib/game/guesses";
 import type { DrawingSnapshot, GameState, PlayerState } from "@/lib/game/types";
 
 type ResultPanelProps = {
@@ -25,14 +26,14 @@ export function ResultPanel({ drawings, state, localPlayer, onReset }: ResultPan
   return (
     <>
       <div className="result-backdrop" />
-      <section className="result-panel">
+      <section aria-labelledby="result-title" aria-modal="true" className="result-panel" role="dialog">
         <div className="result-hero">
-          <p className="eyebrow">
-            Round over!
-          </p>
-          <h2>
+          <div className="result-trophy" aria-hidden="true">
+            <DoodleDecoration color={isTie ? "#5f8fb4" : "#d88700"} size={64} type="trophy" />
+          </div>
+          <p className="eyebrow">Time&apos;s up</p>
+          <h2 id="result-title">
             {isTie ? "It's a tie!" : localWon ? "You win!" : `${winner?.name ?? "Opponent"} wins!`}
-            {localWon && <DoodleDecoration type="star" size={30} color="#ff9800" rotate={15} style={{ marginLeft: 8, verticalAlign: "middle" }} />}
           </h2>
           <p className="result-summary">
             {isTie
@@ -42,16 +43,16 @@ export function ResultPanel({ drawings, state, localPlayer, onReset }: ResultPan
         </div>
 
         <div className="scoreboard" aria-label="Final scores">
-          {sortedPlayers.map((player) => (
+          {sortedPlayers.map((player, index) => (
             <div className={`score-row ${player.id === state.winnerId ? "winner" : ""}`} key={player.id}>
               <span>
-                {player.id === state.winnerId && (
-                  <DoodleDecoration type="star" size={18} color="#ff9800" style={{ marginRight: 6, verticalAlign: "middle" }} />
-                )}
-                {player.name}
-                {localPlayer?.id === player.id ? <small>You</small> : null}
+                <b className="score-position">{index + 1}</b>
+                <span className="score-player-copy">
+                  <strong>{player.name}</strong>
+                  <small>{localPlayer?.id === player.id ? "You · " : ""}{player.score} solved</small>
+                </span>
               </span>
-              <strong>{player.score}</strong>
+              <strong>{player.score} pt{player.score === 1 ? "" : "s"}</strong>
             </div>
           ))}
         </div>
@@ -76,10 +77,12 @@ export function ResultPanel({ drawings, state, localPlayer, onReset }: ResultPan
 
         <div className="result-actions">
           <button className="button" disabled={!localPlayer} onClick={onReset} type="button">
-            <DoodleDecoration type="pencil" size={20} style={{ marginRight: 6 }} />
-            Request rematch
+            <DoodleDecoration type="lightning" size={20} style={{ marginRight: 6 }} />
+            Play again
           </button>
-          {!localPlayer ? <p className="muted">Only active players can request the rematch.</p> : null}
+          <p className="muted">
+            {localPlayer ? "Returns everyone to the lobby." : "Only active players can start the rematch."}
+          </p>
         </div>
       </section>
     </>
@@ -87,11 +90,14 @@ export function ResultPanel({ drawings, state, localPlayer, onReset }: ResultPan
 }
 
 function DrawingCard({ drawing }: { drawing: DrawingSnapshot }) {
-  const confidence = drawing.predictions[0]?.confidence;
+  const matchingPrediction = drawing.predictions.find((prediction) =>
+    isMatchingPrediction(drawing.prompt, prediction),
+  );
+  const confidence = matchingPrediction?.confidence;
   const resultLabel =
     drawing.recognized && typeof confidence === "number"
-      ? `Matched at ${Math.round(confidence * 100)}%`
-      : "Last sketch";
+      ? `Solved · ${Math.round(confidence * 100)}% match`
+      : "Passed sketch";
 
   return (
     <article className="drawing-card">

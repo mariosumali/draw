@@ -1,0 +1,77 @@
+{
+  "id": "quickdraw-onnx",
+  "classCount": 345,
+  "classSource": "quickdraw-345",
+  "architecture": "SE-ResNet (64->128->256)",
+  "runtime": "onnxruntime-web (wasm) in the browser, onnxruntime-node in tests",
+  "inputShape": [
+    1,
+    28,
+    28,
+    1
+  ],
+  "inputDtype": "float32",
+  "inputRange": "0.0 blank paper to 1.0 fully inked",
+  "outputShape": [
+    1,
+    345
+  ],
+  "output": "softmax probabilities over classes.json order",
+  "preprocessing": {
+    "source": "captured strokes, not canvas pixels",
+    "renderSize": 256,
+    "margin": 20,
+    "lineWidth": 12.8,
+    "downscale": "triangle filter to 28x28",
+    "note": "Matches Google's full/numpy_bitmap render, recovered by ml/reverse_engineer_bitmaps.py at ~0.93 mean IoU."
+  },
+  "files": {
+    "int8": {
+      "filename": "quickdraw_int8.onnx",
+      "sizeMb": 4.34,
+      "shipped": true
+    },
+    "float32": {
+      "filename": "quickdraw.onnx",
+      "sizeMb": 16.86,
+      "shipped": false
+    }
+  },
+  "measured": {
+    "harness": "npm run bench:recognizer -- --per-class 30",
+    "dataset": "googlecreativelab/quickdraw-dataset full/simplified, recognized drawings, offset 20000 per class",
+    "samples": 10350,
+    "int8": {
+      "top1": 0.8029,
+      "top3": 0.938,
+      "top5": 0.9624,
+      "map3": 0.8648
+    },
+    "float32": {
+      "top1": 0.8027,
+      "top3": 0.9374,
+      "top5": 0.9626,
+      "map3": 0.8644
+    },
+    "partialStrokes": {
+      "note": "top-1 on the committed fixture when only the first N% of strokes are drawn",
+      "50pct": 0.4696,
+      "25pct": 0.2478,
+      "60pct": 0.5084,
+      "60pct_top3": 0.6932
+    },
+    "includingUnrecognized": {
+      "note": "adds the drawings Google's own recognizer rejected - messier and often abandoned",
+      "samples": 6900,
+      "top1": 0.761,
+      "top3": 0.8974,
+      "map3": 0.8237
+    }
+  },
+  "provenance": {
+    "convertedFrom": "public/models/quickdraw-tflite/quickdraw_model.tflite",
+    "script": "ml/export_onnx_recognizer.py",
+    "dataset": "https://github.com/googlecreativelab/quickdraw-dataset",
+    "license": "CC BY 4.0"
+  }
+}

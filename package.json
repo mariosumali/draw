@@ -11,7 +11,10 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "bench:recognizer": "tsx --tsconfig tsconfig.json scripts/benchmark-recognizer.ts",
+    "sync:ort": "tsx --tsconfig tsconfig.json scripts/sync-ort-assets.ts",
+    "fixtures:build": "tsx --tsconfig tsconfig.json scripts/build-test-fixtures.ts"
   },
   "repository": {
     "type": "git",
@@ -25,9 +28,12 @@
   },
   "homepage": "https://github.com/mariosumali/draw#readme",
   "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
     "@tensorflow/tfjs": "^4.22.0",
     "nanoid": "^5.1.11",
     "next": "^16.2.4",
+    "onnxruntime-node": "^1.27.0",
+    "onnxruntime-web": "^1.27.0",
     "partykit": "^0.0.115",
     "partysocket": "^1.1.18",
     "react": "^19.2.5",
@@ -43,6 +49,7 @@
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.2.4",
     "jsdom": "^29.1.1",
+    "tsx": "^4.23.12",
     "typescript": "^6.0.3",
     "vitest": "^4.1.5"
   }

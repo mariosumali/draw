@@ -249,12 +249,12 @@ export function LandingDemoCanvas() {
 
       <aside className="landing-demo-notes" aria-label="How a round works">
         <div className="rules-card">
-          <p>How a round goes</p>
+          <p>Pick your challenge</p>
           <ol>
-            <li>Get a secret prompt</li>
-            <li>Sketch it before time runs out</li>
-            <li>AI guesses &rarr; points for you</li>
-            <li>Highest score wins the match</li>
+            <li>Speed Run: solve the whole deck</li>
+            <li>Ink Golf: use the fewest strokes</li>
+            <li>Double Take: fool it, then solve</li>
+            <li>Compare the drawings after time</li>
           </ol>
         </div>
         <figure className="quote-card">

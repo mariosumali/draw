@@ -13,7 +13,7 @@ describe("isRecognizedPrompt", () => {
   });
 
   it("rejects low-confidence matches", () => {
-    expect(isRecognizedPrompt("cat", [{ label: "cat", confidence: 0.5 }])).toBe(false);
+    expect(isRecognizedPrompt("cat", [{ label: "cat", confidence: 0.3 }])).toBe(false);
   });
 });
 

@@ -34,9 +34,34 @@ const DOODLES = {
   ),
   pencil: (
     <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M8 32 L28 12 L32 8 L36 4 L32 8 L28 12 L8 32 L4 36 L8 32" />
-      <path d="M4 36 L8 32" />
-      <path d="M28 12 L32 16" />
+      <path d="M6 29 L27 8 L34 15 L13 36 L5 37 Z" />
+      <path d="M24 11 L31 18" />
+      <path d="M6 29 L13 36 L5 37 Z" />
+      <path d="M29 6 L36 13 L34 15 L27 8 Z" />
+      <path d="M5 37 L9 33" />
+    </svg>
+  ),
+  trophy: (
+    <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 6 C12 16 14 23 20 23 C26 23 28 16 28 6 Z" />
+      <path d="M12 9 H6 C6 16 9 19 14 19" />
+      <path d="M28 9 H34 C34 16 31 19 26 19" />
+      <path d="M20 23 V30 M14 35 C17 31 23 31 26 35 Z" />
+      <path d="M15 6 C18 5 23 7 28 6" />
+    </svg>
+  ),
+  bot: (
+    <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 14 C9 10 12 8 16 8 H24 C28 8 31 10 31 14 V29 C31 32 28 34 24 34 H16 C12 34 9 32 9 29 Z" />
+      <path d="M20 8 V4 M17 4 H23" />
+      <circle cx="15" cy="20" r="2" />
+      <circle cx="25" cy="20" r="2" />
+      <path d="M15 27 C18 29 22 29 25 27 M5 18 V25 M35 18 V25" />
+    </svg>
+  ),
+  lightning: (
+    <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M23 3 L8 23 H18 L15 37 L32 16 H21 Z" />
     </svg>
   ),
 };

@@ -1,6 +1,16 @@
 # Draw Battle
 
-Draw Battle is a real-time multiplayer drawing race. Two players join the same invite room, ready up, and race for 90 seconds to draw prompts that an in-browser Quick Draw CNN recognizes.
+Draw Battle is a real-time multiplayer drawing race. Two to six players join the same invite room, ready up, and race to draw prompts that an in-browser Quick Draw CNN recognizes.
+
+## Gameplay Modes
+
+The room creator chooses one of three loops before everyone readies up:
+
+- **Speed Run** is the direct race: every recognized prompt is worth 100 points, so throughput wins.
+- **Ink Golf** rewards economical drawings. Every pen-down counts, and extra strokes reduce the award for a recognized prompt.
+- **Double Take** rewards transformation. First make the recognizer confidently guess the wrong object, then turn the same sketch into the real prompt for a 400-point bonus.
+
+Recognition records the completed sketch only after the active stroke ends, so the AI never pulls the canvas away mid-line. Every match closes with scores and the player's saved drawings.
 
 ## Run Locally
 

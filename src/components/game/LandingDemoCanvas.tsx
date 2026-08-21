@@ -3,17 +3,25 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useAnimatedGuesses } from "@/hooks/useAnimatedGuesses";
-import { startDrawingSound, stopDrawingSound } from "@/lib/audio/sfx";
-import { classifyCanvas, QuickDrawModelAssetError } from "@/lib/quickdraw/model";
+import { useGuessNarration } from "@/hooks/useGuessNarration";
+import { useRecognizerPreload } from "@/hooks/useRecognizerPreload";
+import { playDrawingMovementSound, stopDrawingSound } from "@/lib/audio/sfx";
+import { classifyStrokes, QuickDrawModelAssetError } from "@/lib/quickdraw/model";
+import type { Stroke, StrokePoint } from "@/lib/quickdraw/raster";
+import { Ml5DoodleNetError } from "@/lib/quickdraw/ml5-doodlenet";
 import type { Prediction } from "@/lib/game/types";
 
 const CANVAS_WIDTH = 720;
 const CANVAS_HEIGHT = 320;
 const INK_LINE_WIDTH = 11.2;
+const MIN_STROKE_DISTANCE = 0.75;
 
 export function LandingDemoCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
+  const lastPointRef = useRef<CanvasPoint | null>(null);
+  const strokesRef = useRef<Stroke[]>([]);
+  const activeStrokeRef = useRef<StrokePoint[] | null>(null);
   const hasInkRef = useRef(false);
   const pendingInferenceRef = useRef(false);
   const queuedInferenceRef = useRef(false);
@@ -22,7 +30,10 @@ export function LandingDemoCanvas() {
   const [hasInk, setHasInk] = useState(false);
   const [isGuessing, setIsGuessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { loadState: recognizerLoadState, error: recognizerLoadError } = useRecognizerPreload();
   const guessState = useAnimatedGuesses(rawPredictions);
+  const primeVoice = useGuessNarration({ guessState, active: recognizerLoadState === "ready" });
+  const recognizerReady = recognizerLoadState === "ready";
   const predictions = guessState.visiblePredictions;
 
   const clearCanvas = useCallback(() => {
@@ -35,6 +46,9 @@ export function LandingDemoCanvas() {
     context.fillStyle = "white";
     context.fillRect(0, 0, canvas.width, canvas.height);
     drawingRef.current = false;
+    lastPointRef.current = null;
+    strokesRef.current = [];
+    activeStrokeRef.current = null;
     stopDrawingSound();
     setRawPredictions([]);
     setHasInk(false);
@@ -53,8 +67,7 @@ export function LandingDemoCanvas() {
   }, [clearCanvas]);
 
   async function runInference() {
-    const canvas = canvasRef.current;
-    if (!canvas || !hasInkRef.current) {
+    if (!hasInkRef.current || !recognizerReady) {
       return;
     }
 
@@ -67,13 +80,15 @@ export function LandingDemoCanvas() {
     setIsGuessing(true);
     try {
       setError(null);
-      setRawPredictions(await classifyCanvas(canvas));
+      setRawPredictions(await classifyStrokes(strokesRef.current));
     } catch (classificationError) {
       setRawPredictions([]);
       setError(
-        classificationError instanceof QuickDrawModelAssetError
-          ? "The Quick Draw model could not be loaded."
-          : "The model could not classify this drawing.",
+        classificationError instanceof Ml5DoodleNetError
+          ? classificationError.message
+          : classificationError instanceof QuickDrawModelAssetError
+            ? "The Quick Draw model could not be loaded."
+            : "The model could not classify this drawing.",
       );
     } finally {
       pendingInferenceRef.current = false;
@@ -98,6 +113,13 @@ export function LandingDemoCanvas() {
   }
 
   function beginStroke(event: React.PointerEvent<HTMLCanvasElement>) {
+    if (!recognizerReady) {
+      return;
+    }
+
+    // Safari/iOS only allow speech that descends from a user gesture.
+    primeVoice();
+
     const canvas = canvasRef.current;
     const context = canvas?.getContext("2d", { willReadFrequently: true });
     if (!canvas || !context) {
@@ -105,10 +127,12 @@ export function LandingDemoCanvas() {
     }
 
     drawingRef.current = true;
-    startDrawingSound();
     canvas.setPointerCapture(event.pointerId);
 
     const point = getCanvasPoint(canvas, event);
+    lastPointRef.current = point;
+    activeStrokeRef.current = [point];
+    strokesRef.current = [...strokesRef.current, activeStrokeRef.current];
     context.beginPath();
     context.moveTo(point.x, point.y);
   }
@@ -125,12 +149,20 @@ export function LandingDemoCanvas() {
     }
 
     const point = getCanvasPoint(canvas, event);
+    const lastPoint = lastPointRef.current;
+    if (lastPoint && getPointDistance(lastPoint, point) < MIN_STROKE_DISTANCE) {
+      return;
+    }
+
+    lastPointRef.current = point;
+    activeStrokeRef.current?.push(point);
     context.lineTo(point.x, point.y);
     context.lineCap = "round";
     context.lineJoin = "round";
     context.lineWidth = INK_LINE_WIDTH;
     context.strokeStyle = "#1a1a1a";
     context.stroke();
+    playDrawingMovementSound();
     setHasInk(true);
     hasInkRef.current = true;
     scheduleInference();
@@ -142,6 +174,8 @@ export function LandingDemoCanvas() {
     }
 
     drawingRef.current = false;
+    lastPointRef.current = null;
+    activeStrokeRef.current = null;
     stopDrawingSound();
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
@@ -190,7 +224,11 @@ export function LandingDemoCanvas() {
 
         <div className="landing-demo-guesses" aria-live="polite">
           <strong>Guesses &rarr;</strong>
-          {error ? (
+          {recognizerLoadState === "loading" ? (
+            <p className="muted">Loading DoodleNet (ml5.js)...</p>
+          ) : recognizerLoadError ? (
+            <p className="muted">{recognizerLoadError}</p>
+          ) : error ? (
             <p className="muted">{error}</p>
           ) : guessState.status === "thinking" || isGuessing ? (
             <p className="guess-status thinking">thinking</p>
@@ -249,10 +287,16 @@ function PlaceholderPencil() {
   );
 }
 
-function getCanvasPoint(canvas: HTMLCanvasElement, event: React.PointerEvent<HTMLCanvasElement>) {
+type CanvasPoint = StrokePoint;
+
+function getCanvasPoint(canvas: HTMLCanvasElement, event: React.PointerEvent<HTMLCanvasElement>): CanvasPoint {
   const rect = canvas.getBoundingClientRect();
   return {
     x: ((event.clientX - rect.left) / rect.width) * canvas.width,
     y: ((event.clientY - rect.top) / rect.height) * canvas.height,
   };
+}
+
+function getPointDistance(start: CanvasPoint, end: CanvasPoint) {
+  return Math.hypot(end.x - start.x, end.y - start.y);
 }

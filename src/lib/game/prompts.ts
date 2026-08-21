@@ -1,39 +1,12 @@
-export const QUICK_DRAW_PROMPTS = [
-  "apple",
-  "airplane",
-  "bicycle",
-  "sailboat",
-  "book",
-  "butterfly",
-  "car",
-  "cat",
-  "chair",
-  "cloud",
-  "crown",
-  "cup",
-  "dog",
-  "eye",
-  "fish",
-  "flower",
-  "guitar",
-  "house",
-  "key",
-  "ladder",
-  "moon",
-  "mountain",
-  "mushroom",
-  "pencil",
-  "pizza",
-  "rabbit",
-  "snake",
-  "star",
-  "sun",
-  "tree",
-  "umbrella",
-] as const;
+import { QUICK_DRAW_CATEGORIES } from "@/lib/game/quickdraw-categories";
+
+export const QUICK_DRAW_PROMPTS = QUICK_DRAW_CATEGORIES;
+
+export const QUICK_DRAW_CATEGORIES_URL =
+  "https://raw.githubusercontent.com/googlecreativelab/quickdraw-dataset/master/categories.txt";
 
 export function createPromptDeck(roomId: string, count = 18) {
-  const prompts = [...QUICK_DRAW_PROMPTS];
+  const prompts = [...QUICK_DRAW_CATEGORIES];
   let seed = hashRoomId(roomId);
 
   for (let index = prompts.length - 1; index > 0; index -= 1) {
@@ -42,7 +15,7 @@ export function createPromptDeck(roomId: string, count = 18) {
     [prompts[index], prompts[swapIndex]] = [prompts[swapIndex], prompts[index]];
   }
 
-  return prompts.slice(0, count);
+  return prompts.slice(0, Math.min(count, prompts.length));
 }
 
 function hashRoomId(roomId: string) {

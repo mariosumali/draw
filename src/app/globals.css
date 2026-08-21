@@ -65,6 +65,14 @@ button:disabled {
   opacity: 0.45;
 }
 
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+canvas:focus-visible {
+  outline: 3px solid var(--danger);
+  outline-offset: 3px;
+}
+
 a {
   color: var(--ink);
 }
@@ -1393,6 +1401,10 @@ h1 {
   background: var(--highlight-yellow);
 }
 
+.lobby-share-row button {
+  min-height: 32px;
+}
+
 .lobby-share-row {
   display: flex;
   flex-wrap: wrap;
@@ -1546,6 +1558,22 @@ h1 {
   gap: 10px;
 }
 
+.canvas-skip-button {
+  border-color: var(--danger) !important;
+  color: var(--danger) !important;
+}
+
+.canvas-skip-button:hover:not(:disabled) {
+  background: var(--highlight-pink) !important;
+  color: var(--ink) !important;
+}
+
+.draw-canvas-stage {
+  position: relative;
+  overflow: hidden;
+  border-radius: 3px;
+}
+
 .draw-canvas {
   display: block;
   width: 100%;
@@ -1557,6 +1585,121 @@ h1 {
   box-shadow:
     inset 0 0 30px rgba(0, 0, 0, 0.03),
     3px 4px 0 rgba(0, 0, 0, 0.1);
+  cursor: crosshair;
+  transition: filter 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
+}
+
+.draw-canvas[aria-disabled="true"] {
+  cursor: default;
+}
+
+.draw-canvas-stage.has-recognized-outcome .draw-canvas,
+.draw-canvas-stage.has-skipped-outcome .draw-canvas {
+  filter: saturate(0.75);
+  opacity: 0.22;
+  transform: scale(0.985);
+}
+
+.canvas-outcome {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.94), rgba(255, 253, 247, 0.76) 58%, transparent 86%);
+  color: var(--ink);
+  text-align: center;
+  pointer-events: none;
+  animation: canvas-outcome-in 0.34s cubic-bezier(0.22, 1.4, 0.5, 1);
+}
+
+.canvas-outcome::before,
+.canvas-outcome::after {
+  content: "";
+  position: absolute;
+  width: 82px;
+  height: 82px;
+  background:
+    linear-gradient(currentColor, currentColor) 50% 0 / 2px 18px no-repeat,
+    linear-gradient(currentColor, currentColor) 50% 100% / 2px 18px no-repeat,
+    linear-gradient(90deg, currentColor, currentColor) 0 50% / 18px 2px no-repeat,
+    linear-gradient(90deg, currentColor, currentColor) 100% 50% / 18px 2px no-repeat;
+  color: var(--success);
+  opacity: 0.42;
+}
+
+.canvas-outcome::before {
+  top: 15%;
+  left: 14%;
+  transform: rotate(-14deg);
+}
+
+.canvas-outcome::after {
+  right: 14%;
+  bottom: 14%;
+  transform: rotate(17deg) scale(0.72);
+}
+
+.canvas-outcome-skipped::before,
+.canvas-outcome-skipped::after {
+  color: var(--muted);
+}
+
+.canvas-outcome-icon {
+  display: grid;
+  width: 74px;
+  height: 74px;
+  place-items: center;
+  border: 3px solid currentColor;
+  border-radius: 50%;
+  background: var(--highlight-green);
+  color: #2e7d32;
+  transform: rotate(-5deg);
+  box-shadow: 4px 5px 0 rgba(0, 0, 0, 0.1);
+}
+
+.canvas-outcome-skipped .canvas-outcome-icon {
+  background: var(--highlight-blue);
+  color: var(--pencil);
+}
+
+.canvas-outcome small {
+  margin-top: 12px;
+  color: var(--danger);
+  font-family: var(--font-mono), "Kalam", cursive;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.canvas-outcome strong {
+  max-width: 88%;
+  font-family: var(--font-heading), "Caveat", cursive;
+  font-size: clamp(2.5rem, 7vw, 4.6rem);
+  line-height: 0.92;
+  text-transform: capitalize;
+}
+
+.canvas-outcome p {
+  margin: 8px 0 0;
+  color: var(--pencil);
+  font-family: var(--font-body), "Patrick Hand", cursive;
+  font-size: 1.05rem;
+}
+
+@keyframes canvas-outcome-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9) rotate(-1.5deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+  }
 }
 
 /* ─── Side Cards ─── */
@@ -1671,8 +1814,10 @@ h1 {
   z-index: 200;
   display: grid;
   width: min(820px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
   gap: 14px;
-  overflow: visible;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: clamp(20px, 3vw, 30px);
   transform: translate(-50%, -50%) rotate(-1deg);
   background: var(--panel);
@@ -1703,8 +1848,27 @@ h1 {
 }
 
 .result-hero {
+  position: relative;
   display: grid;
   gap: 4px;
+  min-height: 104px;
+  align-content: center;
+  padding-right: 98px;
+}
+
+.result-trophy {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: grid;
+  width: 82px;
+  height: 82px;
+  place-items: center;
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  background: var(--highlight-yellow);
+  box-shadow: 4px 5px 0 rgba(0, 0, 0, 0.12);
+  transform: translateY(-50%) rotate(7deg);
 }
 
 .result-panel h2 {
@@ -1753,13 +1917,34 @@ h1 {
   gap: 8px;
 }
 
-.score-row small {
-  border: 1.5px dashed var(--success);
-  border-radius: 999px;
-  padding: 1px 8px;
-  color: #2e7d32;
+.score-position {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--danger);
+  font-family: var(--font-mono), "Kalam", cursive;
+  font-size: 0.78rem;
+}
+
+.score-player-copy {
+  display: grid !important;
+  gap: 0 !important;
+}
+
+.score-player-copy > strong {
+  font-family: var(--font-body), "Patrick Hand", cursive;
+  font-size: 1rem;
+  line-height: 1.05;
+}
+
+.score-player-copy small {
+  color: var(--muted);
   font-family: var(--font-heading), "Caveat", cursive;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   font-weight: 700;
   line-height: 1.2;
   text-transform: uppercase;
@@ -1888,8 +2073,8 @@ h1 {
   position: fixed;
   inset: 0;
   z-index: 190;
-  background: rgba(253, 246, 227, 0.85);
-  backdrop-filter: blur(2px);
+  background: rgba(33, 31, 27, 0.34);
+  backdrop-filter: blur(4px) saturate(0.8);
 }
 
 /* ─── Loading Card ─── */
@@ -2016,6 +2201,40 @@ h1 {
   .hud > div {
     transform: none !important;
   }
+
+  .result-hero {
+    min-height: 0;
+    padding-right: 0;
+    text-align: center;
+  }
+
+  .result-trophy {
+    position: static;
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 4px;
+    transform: rotate(5deg);
+  }
+
+  .result-trophy > span {
+    width: 46px !important;
+    height: 46px !important;
+  }
+
+  .canvas-outcome::before,
+  .canvas-outcome::after {
+    display: none;
+  }
+
+  .canvas-outcome-icon {
+    width: 58px;
+    height: 58px;
+  }
+
+  .canvas-outcome-icon > span {
+    width: 40px !important;
+    height: 40px !important;
+  }
 }
 
 /* ─── Extra Polish ─── */
@@ -2108,6 +2327,17 @@ input::selection {
 
 .loading-card {
   animation: wiggle 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* ═══════════════════════════════════════════════
@@ -2618,6 +2848,40 @@ input::selection {
   transition: width 0.25s linear;
 }
 
+.battle-timer-row.is-warning .battle-timer-track span {
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      rgba(26, 26, 26, 0.12) 0,
+      rgba(26, 26, 26, 0.12) 4px,
+      transparent 4px,
+      transparent 8px
+    ),
+    linear-gradient(90deg, var(--highlight-orange), #ffad4d);
+}
+
+.battle-timer-row.is-urgent strong,
+.battle-timer-row.is-urgent > span {
+  color: var(--danger);
+}
+
+.battle-timer-row.is-urgent .battle-timer-track span {
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      rgba(26, 26, 26, 0.16) 0,
+      rgba(26, 26, 26, 0.16) 4px,
+      transparent 4px,
+      transparent 8px
+    ),
+    linear-gradient(90deg, var(--highlight-pink), var(--danger));
+  animation: urgent-timer-pulse 0.7s ease-in-out infinite alternate;
+}
+
+@keyframes urgent-timer-pulse {
+  to { filter: saturate(1.25) brightness(1.05); }
+}
+
 .battle-alerts {
   display: flex;
   flex-wrap: wrap;
@@ -2742,16 +3006,24 @@ input::selection {
   animation: bounce-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.battle-reaction-row {
+.battle-progress-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
+  justify-content: flex-start;
+  gap: 8px;
+  width: min(660px, 100%);
   min-height: 58px;
-  padding-top: 10px;
+  padding: 10px 220px 0 0;
 }
 
-.battle-reaction-row > span {
+.battle-progress-row > span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  border: 2px solid rgba(26, 26, 26, 0.18);
+  border-radius: 999px;
+  padding: 3px 10px;
+  background: rgba(255, 253, 247, 0.72);
   color: var(--muted);
   font-family: var(--font-mono), "Kalam", cursive;
   font-size: 0.7rem;
@@ -2760,24 +3032,10 @@ input::selection {
   text-transform: uppercase;
 }
 
-.battle-reactions {
-  display: inline-flex;
-  gap: 7px;
-}
-
-.battle-reactions button {
-  min-width: 42px;
-  min-height: 34px;
-  border: 2.5px solid var(--ink);
-  border-radius: 10px 4px 12px 4px;
-  padding: 0 8px;
-  background: rgba(255, 253, 247, 0.92);
+.battle-progress-row strong {
   color: var(--ink);
-  font-family: var(--font-heading), "Caveat", cursive;
-  font-size: 1.05rem;
-  font-weight: 700;
-  box-shadow: 2px 3px 0 rgba(0, 0, 0, 0.1);
-  opacity: 1;
+  font-size: 1rem;
+  letter-spacing: 0;
 }
 
 .battle-side-stack {
@@ -2818,6 +3076,9 @@ input::selection {
 }
 
 .battle-paper-card h2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin: 0 0 12px;
   color: #5f946a;
   font-family: var(--font-mono), "Kalam", cursive;
@@ -2947,6 +3208,17 @@ input::selection {
   background: #fff2b8;
 }
 
+.battle-guess-feed li.match {
+  border-color: var(--success);
+  background: rgba(165, 214, 167, 0.62);
+  box-shadow: 2px 2px 0 rgba(46, 125, 50, 0.18);
+}
+
+.battle-guess-feed li.match strong {
+  color: #2e7d32;
+  text-transform: uppercase;
+}
+
 .battle-guess-feed li span {
   color: var(--danger);
   font-weight: 700;
@@ -3034,11 +3306,15 @@ input::selection {
     grid-template-columns: 1fr;
   }
 
-  .battle-reaction-row,
+  .battle-progress-row,
   .battle-footer {
     align-items: center;
     flex-direction: column;
     text-align: center;
+  }
+
+  .battle-progress-row {
+    padding-right: 0;
   }
 
   .battle-canvas-column .canvas-toolbar {
@@ -3103,6 +3379,261 @@ input::selection {
   }
 }
 
+/* ─── Dev Model Lab ─── */
+
+.dev-model-shell {
+  width: min(1240px, calc(100% - 28px));
+  gap: 18px;
+}
+
+.dev-model-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 20px;
+  align-items: start;
+}
+
+.dev-model-canvas {
+  display: grid;
+  gap: 14px;
+}
+
+.dev-model-canvas .draw-panel {
+  width: 100%;
+}
+
+.dev-model-sidebar {
+  display: grid;
+  gap: 16px;
+  /* Long model slugs and stack traces must wrap, not widen the column. */
+  overflow-wrap: anywhere;
+}
+
+.dev-model-options {
+  display: grid;
+  gap: 10px;
+}
+
+.dev-model-option {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  border: 2px dashed var(--pencil);
+  border-radius: 5px 14px 5px 10px;
+  padding: 12px 14px;
+  background: var(--panel-alt);
+  color: var(--foreground);
+  text-align: left;
+  transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+}
+
+.dev-model-option:hover,
+.dev-model-option.active {
+  border-color: var(--ink);
+  border-style: solid;
+  background: var(--highlight-yellow);
+  transform: rotate(-0.5deg);
+}
+
+.dev-model-option strong {
+  color: var(--ink);
+  font-family: var(--font-heading), "Caveat", cursive;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.dev-model-option span {
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
+.dev-model-current-prompt {
+  margin: 0 0 8px;
+  color: var(--ink);
+  font-family: var(--font-heading), "Caveat", cursive;
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 1;
+  text-transform: capitalize;
+}
+
+.dev-model-match {
+  margin: 10px 0 0;
+  border: 2px solid var(--success);
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: rgba(165, 214, 167, 0.35);
+  color: #2e7d32;
+  font-family: var(--font-mono), "Kalam", cursive;
+}
+
+.dev-model-predictions li span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dev-model-status {
+  margin: 0 0 10px;
+  font-family: var(--font-mono), "Kalam", cursive;
+}
+
+.dev-model-status.ready {
+  color: #2e7d32;
+}
+
+.dev-model-status.error {
+  color: var(--danger);
+}
+
+.dev-model-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0 0;
+}
+
+.dev-model-stats div {
+  border: 2px solid rgba(26, 26, 26, 0.14);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: var(--panel-alt);
+}
+
+.dev-model-stats dt {
+  color: var(--muted);
+  font-family: var(--font-mono), "Kalam", cursive;
+  font-size: 0.78rem;
+}
+
+.dev-model-stats dd {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-heading), "Caveat", cursive;
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.dev-model-comparison {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.dev-model-comparison-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.dev-model-comparison-heading h2 {
+  margin: 0;
+  font-size: clamp(1.7rem, 3vw, 2.35rem);
+}
+
+.dev-model-comparison-heading p {
+  margin: 0;
+}
+
+.dev-model-result-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.dev-model-result-card .alert {
+  overflow-wrap: anywhere;
+}
+
+.dev-model-result-card {
+  display: grid;
+  gap: 12px;
+  border: 2px dashed var(--pencil);
+  border-radius: 5px 14px 5px 10px;
+  padding: 14px;
+  background: var(--panel-alt);
+}
+
+.dev-model-result-card.active {
+  border-color: var(--ink);
+  border-style: solid;
+  background: linear-gradient(180deg, rgba(255, 241, 118, 0.56), var(--panel-alt) 72%);
+  box-shadow: 2px 3px 0 rgba(0, 0, 0, 0.08);
+}
+
+.dev-model-result-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dev-model-result-header h3 {
+  margin: 0;
+  font-size: 1.55rem;
+}
+
+.dev-model-result-header p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-family: var(--font-mono), "Kalam", cursive;
+  font-size: 0.76rem;
+}
+
+.dev-model-result-status {
+  flex: 0 0 auto;
+  border: 2px solid rgba(26, 26, 26, 0.16);
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: var(--background);
+  color: var(--muted);
+  font-family: var(--font-mono), "Kalam", cursive;
+  font-size: 0.78rem;
+  line-height: 1.2;
+}
+
+.dev-model-result-status.running {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.dev-model-result-status.ready {
+  border-color: var(--success);
+  color: #2e7d32;
+}
+
+.dev-model-result-status.error {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+@media (max-width: 980px) {
+  .dev-model-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .dev-model-sidebar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dev-model-result-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dev-model-comparison-heading {
+    align-items: start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 700px) {
+  .dev-model-sidebar {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ─── Sound Toggle ─── */
 
 .sound-toggle {
@@ -3130,4 +3661,345 @@ input::selection {
 
 .sound-toggle:active {
   transform: rotate(1deg) scale(0.95);
+}
+
+/* ─── Guessing Voice Control ─── */
+
+.voice-control {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.voice-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 2px dashed var(--pencil);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--pencil);
+  font-family: var(--font-body), "Patrick Hand", cursive;
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.voice-trigger:hover {
+  background: var(--highlight-green);
+  border-style: solid;
+  color: var(--ink);
+  transform: rotate(-2deg) scale(1.05);
+}
+
+.voice-trigger:active {
+  transform: rotate(1deg) scale(0.95);
+}
+
+.voice-trigger[aria-expanded="true"] {
+  background: var(--highlight-yellow);
+  border-style: solid;
+  color: var(--ink);
+}
+
+.voice-trigger-off {
+  opacity: 0.65;
+}
+
+.voice-panel {
+  /* Portalled to <body> and positioned in JS: the app's rotated paper cards
+     create stacking contexts that would clip an absolutely-placed panel. */
+  position: fixed;
+  z-index: 200;
+  display: grid;
+  gap: 12px;
+  width: 300px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  border: 2.5px solid var(--ink);
+  border-radius: 4px;
+  padding: 14px;
+  background: var(--panel-alt);
+  box-shadow: 4px 4px 0 rgba(26, 26, 26, 0.16);
+  text-align: left;
+  transform: rotate(-0.4deg);
+}
+
+.voice-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 2px dashed rgba(26, 26, 26, 0.2);
+  padding-bottom: 10px;
+}
+
+.voice-panel-header strong {
+  display: block;
+  color: var(--ink);
+  font-family: var(--font-heading), "Caveat", cursive;
+  font-size: 1.25rem;
+  line-height: 1.1;
+}
+
+.voice-panel-header small,
+.voice-chattiness small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.voice-switch {
+  flex-shrink: 0;
+  min-width: 52px;
+  border: 2px solid var(--pencil);
+  border-radius: 999px;
+  padding: 4px 12px;
+  background: var(--panel);
+  color: var(--muted);
+  font-family: var(--font-mono), "Kalam", cursive;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.voice-switch.on {
+  border-color: var(--ink);
+  background: var(--highlight-green);
+  color: var(--ink);
+}
+
+.voice-field {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.voice-field > span,
+.voice-field > legend {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0;
+  color: var(--pencil);
+  font-family: var(--font-mono), "Kalam", cursive;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.voice-field > legend {
+  width: 100%;
+  margin-bottom: 5px;
+}
+
+.voice-slider span em {
+  color: var(--ink);
+  font-family: var(--font-body), "Patrick Hand", cursive;
+  font-size: 0.9rem;
+  font-style: normal;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.voice-field select {
+  width: 100%;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  padding: 5px 8px;
+  background: var(--panel);
+  color: var(--ink);
+  font-family: var(--font-body), "Patrick Hand", cursive;
+  font-size: 0.9rem;
+}
+
+.voice-field input[type="range"] {
+  width: 100%;
+  accent-color: var(--ink);
+  cursor: pointer;
+}
+
+.voice-field:has(:disabled) {
+  opacity: 0.5;
+}
+
+.voice-segmented {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.voice-segmented button {
+  padding: 5px 4px;
+  border-right: 2px solid var(--ink);
+  background: var(--panel);
+  color: var(--pencil);
+  font-family: var(--font-body), "Patrick Hand", cursive;
+  font-size: 0.85rem;
+  line-height: 1.2;
+}
+
+.voice-segmented button:last-child {
+  border-right: 0;
+}
+
+.voice-segmented button.selected {
+  background: var(--highlight-yellow);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.voice-panel-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  border-top: 2px dashed rgba(26, 26, 26, 0.2);
+  padding-top: 10px;
+}
+
+.voice-panel-actions .button {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.battle-room-card .voice-control {
+  margin-left: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-trigger,
+  .voice-trigger:hover,
+  .voice-trigger:active {
+    transition: none;
+    transform: none;
+  }
+
+  .voice-panel {
+    transform: none;
+  }
+}
+
+/* ─── Model Lab: voice narration ─── */
+
+.dev-model-speak-button {
+  justify-self: start;
+  margin-top: 8px;
+  border: 2px dashed var(--pencil);
+  border-radius: 3px;
+  padding: 3px 10px;
+  background: transparent;
+  color: var(--pencil);
+  font-family: var(--font-body), "Patrick Hand", cursive;
+  font-size: 0.85rem;
+  transition: all 0.15s ease;
+}
+
+.dev-model-speak-button:hover {
+  border-style: solid;
+  background: var(--highlight-green);
+  color: var(--ink);
+}
+
+.dev-model-transcript {
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dev-model-transcript li {
+  display: grid;
+  gap: 2px;
+  border-left: 3px solid var(--pencil);
+  padding: 3px 0 3px 8px;
+  color: var(--ink);
+  font-family: var(--font-body), "Patrick Hand", cursive;
+  font-size: 0.92rem;
+  line-height: 1.3;
+}
+
+.dev-model-transcript li small {
+  color: var(--muted);
+  font-family: var(--font-mono), "Kalam", cursive;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dev-model-transcript-thinking {
+  border-left-color: var(--muted);
+  color: var(--muted);
+  font-style: italic;
+}
+
+.dev-model-transcript-recognized {
+  border-left-color: var(--success);
+  font-weight: 700;
+}
+
+.dev-model-transcript-stumped {
+  border-left-color: var(--danger);
+}
+
+.dev-model-transcript-prompt {
+  border-left-color: var(--warning);
+}
+
+.dev-preview-actions .voice-control {
+  margin-right: 4px;
+}
+
+/* ─── Voice status alert ─── */
+
+.voice-alert {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  margin: 0;
+  border: 2px solid var(--warning);
+  border-radius: 3px;
+  padding: 8px 10px;
+  background: rgba(255, 204, 128, 0.28);
+  color: var(--ink);
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+.voice-alert-unsupported,
+.voice-alert-no-voices,
+.voice-alert-failed {
+  border-color: var(--danger);
+  background: rgba(229, 57, 53, 0.12);
+}
+
+.voice-alert button {
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  padding: 3px 10px;
+  background: var(--panel);
+  color: var(--ink);
+  font-family: var(--font-body), "Patrick Hand", cursive;
+  font-size: 0.85rem;
+}
+
+.voice-alert button:hover {
+  background: var(--highlight-green);
 }

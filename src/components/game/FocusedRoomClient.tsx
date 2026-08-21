@@ -140,6 +140,8 @@ export function FocusedRoomClient({ roomId, initialName }: FocusedRoomClientProp
         prompt: currentPrompt,
         confidence: matchedPrediction?.confidence ?? drawing.predictions[0]?.confidence ?? 0,
         predictions: drawing.predictions,
+        strokeCount: drawing.strokeCount,
+        misdirected: drawing.misdirected,
       });
     },
     [currentPrompt, playerId, saveDrawing, sendMessage],
@@ -266,6 +268,7 @@ export function FocusedRoomClient({ roomId, initialName }: FocusedRoomClientProp
         <DrawCanvas
           classify={classify}
           disabled={!canDraw}
+          mode={gameState.mode}
           onGuessStateChange={setGuessState}
           onPredictions={setPredictions}
           onSketchChange={saveDrawing}

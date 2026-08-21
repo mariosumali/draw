@@ -4,9 +4,9 @@ import { ResultPanel } from "@/components/game/ResultPanel";
 import type { DrawingSnapshot, GameState, PlayerState } from "@/lib/game/types";
 
 const players: PlayerState[] = [
-  player("local-player", "You", 0, 5),
-  player("player-2", "Mina", 1, 4),
-  player("player-3", "Theo", 2, 2),
+  player("local-player", "You", 0, 2_420, 5),
+  player("player-2", "Mina", 1, 2_180, 4),
+  player("player-3", "Theo", 2, 1_050, 2),
 ];
 
 const drawings: DrawingSnapshot[] = [
@@ -22,6 +22,7 @@ const state: GameState = {
   spectators: 0,
   chatMessages: [],
   prompts: ["cat", "tree", "bicycle", "pizza", "moon"],
+  mode: "minimal",
   maxPlayers: 3,
   roundDurationMs: 90_000,
   serverNow: Date.now(),
@@ -47,7 +48,7 @@ export function GameOverPreview() {
   );
 }
 
-function player(id: string, name: string, slot: number, score: number): PlayerState {
+function player(id: string, name: string, slot: number, score: number, solved: number): PlayerState {
   return {
     id,
     name,
@@ -55,8 +56,8 @@ function player(id: string, name: string, slot: number, score: number): PlayerSt
     score,
     ready: false,
     connected: true,
-    promptIndex: score,
-    completedPrompts: [],
+    promptIndex: solved,
+    completedPrompts: statePrompts().slice(0, solved),
     lastSeen: Date.now(),
   };
 }
@@ -69,7 +70,13 @@ function drawing(id: string, prompt: string, path: string, recognized: boolean, 
     imageDataUrl: svgDataUrl(path),
     predictions: [{ label: prompt, confidence }],
     savedAt: order,
+    strokeCount: order * 2,
+    misdirected: false,
   };
+}
+
+function statePrompts() {
+  return ["cat", "tree", "bicycle", "pizza", "moon"];
 }
 
 function svgDataUrl(path: string) {

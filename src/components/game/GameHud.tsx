@@ -35,7 +35,7 @@ export function GameHud({ receivedAt, state, localPlayer }: GameHudProps) {
         <strong>{state.phase === "countdown" ? Math.ceil(countdownMs / 1000) : formatTime(remainingMs)}</strong>
       </div>
       <div>
-        <span className="hud-label">Your score</span>
+        <span className="hud-label">Your points</span>
         <strong>
           {localPlayer?.score ?? 0}
           {(localPlayer?.score ?? 0) > 0 && (

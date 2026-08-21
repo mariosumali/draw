@@ -2,6 +2,7 @@
 
 import { DoodleDecoration } from "@/components/ui/DoodleDecoration";
 import { isMatchingPrediction } from "@/lib/game/guesses";
+import { getGameModeDefinition, scorePrompt, type GameMode } from "@/lib/game/modes";
 import type { DrawingSnapshot, GameState, PlayerState } from "@/lib/game/types";
 
 type ResultPanelProps = {
@@ -22,6 +23,7 @@ export function ResultPanel({ drawings, state, localPlayer, onReset }: ResultPan
   const topScore = Math.max(0, ...state.players.map((player) => player.score));
   const sortedPlayers = [...state.players].sort((a, b) => b.score - a.score || a.slot - b.slot);
   const sortedDrawings = [...drawings].sort((a, b) => a.savedAt - b.savedAt);
+  const mode = getGameModeDefinition(state.mode);
 
   return (
     <>
@@ -31,7 +33,7 @@ export function ResultPanel({ drawings, state, localPlayer, onReset }: ResultPan
           <div className="result-trophy" aria-hidden="true">
             <DoodleDecoration color={isTie ? "#5f8fb4" : "#d88700"} size={64} type="trophy" />
           </div>
-          <p className="eyebrow">Time&apos;s up</p>
+          <p className="eyebrow">{mode.name} · time&apos;s up</p>
           <h2 id="result-title">
             {isTie ? "It's a tie!" : localWon ? "You win!" : `${winner?.name ?? "Opponent"} wins!`}
           </h2>
@@ -49,7 +51,10 @@ export function ResultPanel({ drawings, state, localPlayer, onReset }: ResultPan
                 <b className="score-position">{index + 1}</b>
                 <span className="score-player-copy">
                   <strong>{player.name}</strong>
-                  <small>{localPlayer?.id === player.id ? "You · " : ""}{player.score} solved</small>
+                  <small>
+                    {localPlayer?.id === player.id ? "You · " : ""}
+                    {player.completedPrompts.length} solved
+                  </small>
                 </span>
               </span>
               <strong>{player.score} pt{player.score === 1 ? "" : "s"}</strong>
@@ -65,7 +70,7 @@ export function ResultPanel({ drawings, state, localPlayer, onReset }: ResultPan
           {sortedDrawings.length ? (
             <div className="drawing-grid">
               {sortedDrawings.map((drawing) => (
-                <DrawingCard drawing={drawing} key={drawing.id} />
+                <DrawingCard drawing={drawing} key={drawing.id} mode={state.mode} />
               ))}
             </div>
           ) : (
@@ -89,14 +94,19 @@ export function ResultPanel({ drawings, state, localPlayer, onReset }: ResultPan
   );
 }
 
-function DrawingCard({ drawing }: { drawing: DrawingSnapshot }) {
+function DrawingCard({ drawing, mode }: { drawing: DrawingSnapshot; mode: GameMode }) {
   const matchingPrediction = drawing.predictions.find((prediction) =>
     isMatchingPrediction(drawing.prompt, prediction),
   );
   const confidence = matchingPrediction?.confidence;
+  const award = scorePrompt(mode, {
+    confidence: confidence ?? 0,
+    strokeCount: drawing.strokeCount ?? 99,
+    misdirected: Boolean(drawing.misdirected),
+  });
   const resultLabel =
     drawing.recognized && typeof confidence === "number"
-      ? `Solved · ${Math.round(confidence * 100)}% match`
+      ? `Solved · +${award} · ${drawing.strokeCount ?? "?"} strokes`
       : "Passed sketch";
 
   return (

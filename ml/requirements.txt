@@ -2,3 +2,11 @@ numpy
 tensorflow
 tensorflowjs
 requests
+torch
+torchvision
+transformers
+safetensors
+pillow
+tf2onnx
+onnx
+onnxruntime

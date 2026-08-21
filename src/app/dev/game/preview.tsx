@@ -67,12 +67,12 @@ export function GamePagePreview() {
           return player;
         }
 
-        const nextPromptIndex = Math.min(player.promptIndex + 1, currentState.prompts.length - 1);
+        const nextPromptIndex = Math.min(player.promptIndex + 1, currentState.prompts.length);
         return {
           ...player,
           completedPrompts: [...new Set([...player.completedPrompts, drawing.prompt])],
           promptIndex: nextPromptIndex,
-          score: player.score + 100,
+          score: player.score + 1,
         };
       }),
     }));
@@ -144,10 +144,24 @@ export function GamePagePreview() {
         lastError={null}
         localPlayer={localPlayer}
         modelError={null}
+        recognizerLoadState="ready"
         onGuessStateChange={setGuessState}
         onLeaveRoom={() => window.alert("Preview only: this would leave the room.")}
         onPredictions={setPredictions}
         onRecognized={completePrompt}
+        onSkip={(drawing) => {
+          if (drawing) saveDrawing(drawing);
+          setInferenceCount(0);
+          setPredictions([]);
+          setState((currentState) => ({
+            ...currentState,
+            players: currentState.players.map((player) =>
+              player.id === "preview-player"
+                ? { ...player, promptIndex: Math.min(player.promptIndex + 1, currentState.prompts.length) }
+                : player,
+            ),
+          }));
+        }}
         onSketchChange={saveDrawing}
         onSketchClear={clearDrawing}
         opponents={opponents}
@@ -166,10 +180,10 @@ export function GamePagePreview() {
 
 function createPreviewState(now: number): GameState {
   const players: PlayerState[] = [
-    player("preview-player", "Player", 0, 240, 1, now),
-    player("preview-mira", "Mira", 1, 180, 2, now),
-    player("preview-jules", "Jules", 2, 150, 2, now),
-    player("preview-aki", "Aki", 3, 80, 0, now),
+    player("preview-player", "Player", 0, 1, 1, now),
+    player("preview-mira", "Mira", 1, 2, 2, now),
+    player("preview-jules", "Jules", 2, 2, 2, now),
+    player("preview-aki", "Aki", 3, 0, 0, now),
   ];
 
   return {

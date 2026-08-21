@@ -7,10 +7,12 @@ import { nanoid } from "nanoid";
 import { LandingDemoCanvas } from "@/components/game/LandingDemoCanvas";
 import { DoodleDecoration } from "@/components/ui/DoodleDecoration";
 import { SoundToggle } from "@/components/ui/SoundToggle";
+import { VoiceControl } from "@/components/ui/VoiceControl";
 import { startLobbyMusic, stopLobbyMusic } from "@/lib/audio/music";
+import { MAX_PLAYERS } from "@/lib/game/types";
 
 const landingFeatures = [
-  "Up to 8 players per room",
+  `Up to ${MAX_PLAYERS} players per room`,
   "Share an invite link in 1 click",
   "AI guesses your sketch in real time",
   "No sign-up. No download.",
@@ -128,8 +130,12 @@ export default function Home() {
             </form>
           </details>
           <div className="sound-row">
-            <span>Lobby music</span>
+            <span>Sound &amp; music</span>
             <SoundToggle />
+          </div>
+          <div className="sound-row">
+            <span>Guessing voice</span>
+            <VoiceControl compact />
           </div>
         </aside>
 

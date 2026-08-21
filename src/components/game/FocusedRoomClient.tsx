@@ -4,13 +4,16 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import usePartySocket from "partysocket/react";
 
-import { DrawCanvas } from "@/components/game/DrawCanvas";
+import { DrawCanvas, type CanvasStroke } from "@/components/game/DrawCanvas";
 import { LobbyRoster } from "@/components/game/LobbyRoster";
 import { ResultPanel } from "@/components/game/ResultPanel";
 import { DoodleDecoration } from "@/components/ui/DoodleDecoration";
+import { VoiceControl } from "@/components/ui/VoiceControl";
 import { EMPTY_ANIMATED_GUESS_SNAPSHOT, type AnimatedGuessSnapshot } from "@/hooks/useAnimatedGuesses";
+import { useRecognizerPreload } from "@/hooks/useRecognizerPreload";
 import { isMatchingPrediction } from "@/lib/game/guesses";
-import { classifyCanvas, QuickDrawModelAssetError } from "@/lib/quickdraw/model";
+import { classifyStrokes, QuickDrawModelAssetError } from "@/lib/quickdraw/model";
+import { Ml5DoodleNetError } from "@/lib/quickdraw/ml5-doodlenet";
 import type { ClientMessage, DrawingSnapshot, GameState, Prediction, ServerMessage } from "@/lib/game/types";
 
 type FocusedRoomClientProps = {
@@ -34,6 +37,7 @@ export function FocusedRoomClient({ roomId, initialName }: FocusedRoomClientProp
   const [guessState, setGuessState] = useState<AnimatedGuessSnapshot>(EMPTY_ANIMATED_GUESS_SNAPSHOT);
   const [drawings, setDrawings] = useState<DrawingSnapshot[]>([]);
   const [modelError, setModelError] = useState<string | null>(null);
+  const { loadState: recognizerLoadState, error: recognizerLoadError } = useRecognizerPreload();
   const [lastError, setLastError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -84,7 +88,12 @@ export function FocusedRoomClient({ roomId, initialName }: FocusedRoomClientProp
   const readyPlayers = connectedPlayers.filter((p) => p.ready);
   const opponent = connectedPlayers.find((p) => p.id !== playerId);
   const inviteUrl = typeof window === "undefined" ? "" : window.location.href.split("?")[0];
-  const canDraw = gameState?.phase === "playing" && Boolean(currentPrompt) && !modelError;
+  const canDraw =
+    gameState?.phase === "playing" &&
+    Boolean(currentPrompt) &&
+    recognizerLoadState === "ready" &&
+    !modelError &&
+    !recognizerLoadError;
   const currentPromptId = localPlayer && currentPrompt ? `${localPlayer.promptIndex}:${currentPrompt}` : undefined;
 
   const saveDrawing = useCallback((drawing: DrawingSnapshot) => {
@@ -104,15 +113,17 @@ export function FocusedRoomClient({ roomId, initialName }: FocusedRoomClientProp
     setDrawings((currentDrawings) => currentDrawings.filter((drawing) => drawing.id !== drawingId));
   }, []);
 
-  const classify = useCallback(async (canvas: HTMLCanvasElement) => {
+  const classify = useCallback(async (_canvas: HTMLCanvasElement, strokes: CanvasStroke[]) => {
     try {
       setModelError(null);
-      return await classifyCanvas(canvas);
+      return await classifyStrokes(strokes);
     } catch (error) {
       const message =
-        error instanceof QuickDrawModelAssetError
-          ? "Model assets missing."
-          : "Recognition failed.";
+        error instanceof Ml5DoodleNetError
+          ? error.message
+          : error instanceof QuickDrawModelAssetError
+            ? "Model assets missing."
+            : "Recognition failed.";
       setModelError(message);
       return [];
     }
@@ -130,6 +141,15 @@ export function FocusedRoomClient({ roomId, initialName }: FocusedRoomClientProp
         confidence: matchedPrediction?.confidence ?? drawing.predictions[0]?.confidence ?? 0,
         predictions: drawing.predictions,
       });
+    },
+    [currentPrompt, playerId, saveDrawing, sendMessage],
+  );
+
+  const skipPrompt = useCallback(
+    (drawing: DrawingSnapshot | null) => {
+      if (!playerId || !currentPrompt) return;
+      if (drawing) saveDrawing(drawing);
+      sendMessage({ type: "skipPrompt", playerId, prompt: currentPrompt });
     },
     [currentPrompt, playerId, saveDrawing, sendMessage],
   );
@@ -187,6 +207,7 @@ export function FocusedRoomClient({ roomId, initialName }: FocusedRoomClientProp
           <button className="focused-copy-btn" onClick={copyInvite} type="button">
             {copied ? "Copied!" : "Invite"}
           </button>
+          <VoiceControl compact />
         </div>
         <div className="focused-topbar-right">
           {opponent && <span className="focused-opponent">vs. {opponent.name}</span>}
@@ -250,6 +271,7 @@ export function FocusedRoomClient({ roomId, initialName }: FocusedRoomClientProp
           onSketchChange={saveDrawing}
           onSketchClear={removeDrawing}
           onRecognized={completePrompt}
+          onSkip={skipPrompt}
           prompt={currentPrompt}
           promptId={currentPromptId}
         />

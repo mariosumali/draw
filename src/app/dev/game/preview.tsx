@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { BattleStage } from "@/components/game/RoomClient";
 import { EMPTY_ANIMATED_GUESS_SNAPSHOT, type AnimatedGuessSnapshot } from "@/hooks/useAnimatedGuesses";
 import type { DrawingSnapshot, GameState, PlayerState, Prediction } from "@/lib/game/types";
+import { scorePrompt } from "@/lib/game/modes";
 
 const PROMPTS = ["pelican on a skateboard", "sleepy robot", "pizza moon", "tiny dragon", "beach bicycle"];
 const ROUND_DURATION_MS = 90_000;
@@ -68,11 +69,16 @@ export function GamePagePreview() {
         }
 
         const nextPromptIndex = Math.min(player.promptIndex + 1, currentState.prompts.length);
+        const award = scorePrompt(currentState.mode, {
+          confidence: drawing.predictions[0]?.confidence ?? 0,
+          strokeCount: drawing.strokeCount ?? 99,
+          misdirected: Boolean(drawing.misdirected),
+        });
         return {
           ...player,
           completedPrompts: [...new Set([...player.completedPrompts, drawing.prompt])],
           promptIndex: nextPromptIndex,
-          score: player.score + 1,
+          score: player.score + award,
         };
       }),
     }));
@@ -180,9 +186,9 @@ export function GamePagePreview() {
 
 function createPreviewState(now: number): GameState {
   const players: PlayerState[] = [
-    player("preview-player", "Player", 0, 1, 1, now),
-    player("preview-mira", "Mira", 1, 2, 2, now),
-    player("preview-jules", "Jules", 2, 2, 2, now),
+    player("preview-player", "Player", 0, 400, 1, now),
+    player("preview-mira", "Mira", 1, 800, 2, now),
+    player("preview-jules", "Jules", 2, 800, 2, now),
     player("preview-aki", "Aki", 3, 0, 0, now),
   ];
 
@@ -208,6 +214,7 @@ function createPreviewState(now: number): GameState {
       },
     ],
     prompts: PROMPTS,
+    mode: "misdirection",
     maxPlayers: players.length,
     roundDurationMs: ROUND_DURATION_MS,
     serverNow: now,

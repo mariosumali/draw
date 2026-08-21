@@ -1,0 +1,15 @@
+{
+  "classCount": 345,
+  "classSource": "doodlenet-345",
+  "dataset": "Google QuickDraw",
+  "inputShape": [
+    1,
+    28,
+    28,
+    1
+  ],
+  "source": "https://github.com/yining1023/doodleNet/tree/master/demo/DoodleClassifier_345",
+  "modelUrl": "https://raw.githubusercontent.com/yining1023/doodleNet/master/demo/DoodleClassifier_345/model/model.json",
+  "weightsUrl": "https://raw.githubusercontent.com/yining1023/doodleNet/master/demo/DoodleClassifier_345/model/group1-shard1of1.bin",
+  "notes": "Pretrained DoodleNet model trained on all 345 QuickDraw classes with 50k images per class, per upstream README."
+}

@@ -1,0 +1,4 @@
+onnxruntime-web 1.27.0
+entry ort.wasm.bundle.min.mjs
+assets ort-wasm-simd-threaded.mjs, ort-wasm-simd-threaded.wasm
+Regenerate with: npm run sync:ort

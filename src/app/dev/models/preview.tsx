@@ -301,6 +301,7 @@ export function ModelLabPreview() {
           <DrawCanvas
             classify={classify}
             disabled={!prompt}
+            mode="sprint"
             onPredictions={updatePredictions}
             onRecognized={handleRecognized}
             onSketchChange={setSavedSketch}

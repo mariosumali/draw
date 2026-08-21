@@ -14,6 +14,12 @@ import { useGameSounds } from "@/hooks/useGameSounds";
 import { useRecognizerPreload } from "@/hooks/useRecognizerPreload";
 import { EMPTY_ANIMATED_GUESS_SNAPSHOT, type AnimatedGuessSnapshot } from "@/hooks/useAnimatedGuesses";
 import { isMatchingPrediction } from "@/lib/game/guesses";
+import {
+  GAME_MODES,
+  getGameModeDefinition,
+  scorePrompt,
+  type GameMode,
+} from "@/lib/game/modes";
 import { classifyStrokes, QuickDrawModelAssetError } from "@/lib/quickdraw/model";
 import { Ml5DoodleNetError } from "@/lib/quickdraw/ml5-doodlenet";
 import {
@@ -172,6 +178,8 @@ export function RoomClient({ roomId, initialName }: RoomClientProps) {
         prompt: currentPrompt,
         confidence: matchedPrediction?.confidence ?? drawing.predictions[0]?.confidence ?? 0,
         predictions: drawing.predictions,
+        strokeCount: drawing.strokeCount,
+        misdirected: drawing.misdirected,
       });
     },
     [currentPrompt, playerId, saveDrawing, sendMessage],
@@ -212,7 +220,9 @@ export function RoomClient({ roomId, initialName }: RoomClientProps) {
     sendMessage({ type: "reset", playerId });
   }
 
-  function updateSettings(settings: Pick<ClientMessage & { type: "updateSettings" }, "maxPlayers" | "roundDurationMs">) {
+  function updateSettings(
+    settings: Omit<Extract<ClientMessage, { type: "updateSettings" }>, "type" | "playerId">,
+  ) {
     if (!playerId || !localPlayer || gameState?.phase !== "waiting") {
       return;
     }
@@ -346,6 +356,12 @@ export function RoomClient({ roomId, initialName }: RoomClientProps) {
                     Match settings
                   </p>
 
+                  <LobbyModePicker
+                    disabled={!localPlayer}
+                    onChange={(mode) => updateSettings({ mode })}
+                    value={gameState.mode}
+                  />
+
                   <div className="lobby-settings">
                     <LobbySegmentedSetting
                       disabled={!localPlayer}
@@ -371,11 +387,15 @@ export function RoomClient({ roomId, initialName }: RoomClientProps) {
                       value={gameState.maxPlayers}
                     />
                     <LobbyReadOnlySetting
-                      hint="unique sketches in this match"
+                      hint="shared challenge order"
                       label="Prompt deck"
                       value={`${gameState.prompts.length} cards`}
                     />
-                    <LobbyReadOnlySetting hint="prompt deck" label="Difficulty" value="Mixed" />
+                    <LobbyReadOnlySetting
+                      hint="how this mode rewards a solve"
+                      label="Scoring"
+                      value={getGameModeDefinition(gameState.mode).eyebrow}
+                    />
                   </div>
 
                   {shouldShowLeaveConfirm ? (
@@ -562,6 +582,14 @@ export function BattleStage({
   const solvedCount = localPlayer?.completedPrompts.length ?? 0;
   const promptsSeen = Math.min(localPlayer?.promptIndex ?? 0, state.prompts.length);
   const promptsRemaining = Math.max(0, state.prompts.length - promptsSeen);
+  const modeDefinition = getGameModeDefinition(state.mode);
+  const outcomeAward = canvasOutcome?.kind === "recognized"
+    ? scorePrompt(state.mode, {
+        confidence: canvasOutcome.confidence ?? 0,
+        strokeCount: canvasOutcome.strokeCount ?? 99,
+        misdirected: Boolean(canvasOutcome.misdirected),
+      })
+    : 0;
 
   return (
     <section className="battle-stage" aria-label="Drawing round">
@@ -573,10 +601,10 @@ export function BattleStage({
         <div className="battle-prompt-card">
           <span>
             {canvasOutcome?.kind === "recognized"
-              ? "Sketch solved · +1 point"
+              ? `Sketch solved · +${outcomeAward} points`
               : canvasOutcome?.kind === "skipped"
                 ? "Passed · no penalty"
-                : `Sketch ${roundNumber} of ${state.prompts.length} · draw this`}
+                : `${modeDefinition.name} · sketch ${roundNumber} of ${state.prompts.length}`}
           </span>
           <strong>
             <span>&quot;</span>
@@ -618,6 +646,7 @@ export function BattleStage({
           <DrawCanvas
             classify={classify}
             disabled={!canDraw}
+            mode={state.mode}
             onGuessStateChange={onGuessStateChange}
             onOutcomeChange={setCanvasOutcome}
             onPredictions={onPredictions}
@@ -631,7 +660,8 @@ export function BattleStage({
 
           <footer className="battle-progress-row" aria-label="Round progress">
             <span><strong>{solvedCount}</strong> solved</span>
-            <span><strong>{promptsRemaining}</strong> left in deck</span>
+            <span><strong>{localPlayer?.score ?? 0}</strong> points</span>
+            <span><strong>{promptsRemaining}</strong> left</span>
           </footer>
         </div>
 
@@ -644,7 +674,7 @@ export function BattleStage({
       <footer className="battle-footer">
         <p>
           <DoodleDecoration type="pencil" size={18} color="#ffcc33" style={{ marginRight: 8, verticalAlign: "middle" }} />
-          Shapes first, details after. Stuck? Pass for a fresh prompt—there&apos;s no point penalty.
+          <strong>{modeDefinition.name}:</strong> {modeDefinition.rules}
         </p>
         <span>
           {solvedCount} solved · {watcherCount} watching · {opponentNames ? `vs. ${opponentNames}` : "waiting for rivals"}
@@ -713,6 +743,39 @@ function ScoreboardPanel({ state, localPlayer }: { state: GameState; localPlayer
         ))}
       </ol>
     </section>
+  );
+}
+
+function LobbyModePicker({
+  disabled,
+  onChange,
+  value,
+}: {
+  disabled: boolean;
+  onChange: (mode: GameMode) => void;
+  value: GameMode;
+}) {
+  return (
+    <fieldset className="lobby-mode-picker">
+      <legend>Choose the loop</legend>
+      <div className="lobby-mode-grid">
+        {GAME_MODES.map((mode) => (
+          <button
+            aria-pressed={mode.id === value}
+            className={mode.id === value ? "selected" : ""}
+            disabled={disabled}
+            key={mode.id}
+            onClick={() => onChange(mode.id)}
+            type="button"
+          >
+            <small>{mode.eyebrow}</small>
+            <strong>{mode.name}</strong>
+            <span>{mode.tagline}</span>
+            <em>{mode.scoring}</em>
+          </button>
+        ))}
+      </div>
+    </fieldset>
   );
 }
 

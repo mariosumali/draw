@@ -5,8 +5,8 @@ export const COUNTDOWN_MS = 3_000;
 export const MIN_ROUND_DURATION_MS = 45_000;
 export const ROUND_DURATION_MS = 90_000;
 export const MAX_ROUND_DURATION_MS = 180_000;
-export const RECOGNITION_CONFIDENCE = 0.72;
-export const RECOGNITION_TOP_N = 3;
+export const RECOGNITION_CONFIDENCE = 0.45;
+export const RECOGNITION_TOP_N = 5;
 
 export type GamePhase = "waiting" | "countdown" | "playing" | "finished";
 
@@ -92,6 +92,11 @@ export type ClientMessage =
       prompt: string;
       confidence: number;
       predictions: Prediction[];
+    }
+  | {
+      type: "skipPrompt";
+      playerId: string;
+      prompt: string;
     }
   | {
       type: "reset";

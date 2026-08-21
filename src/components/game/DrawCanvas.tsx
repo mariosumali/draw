@@ -9,10 +9,16 @@ import { playDrawingMovementSound, stopDrawingSound } from "@/lib/audio/sfx";
 import { type AnimatedGuessSnapshot, useAnimatedGuesses } from "@/hooks/useAnimatedGuesses";
 import { useGuessNarration } from "@/hooks/useGuessNarration";
 import { type DrawingSnapshot, type Prediction } from "@/lib/game/types";
+import {
+  MISDIRECTION_CONFIDENCE,
+  getGameModeDefinition,
+  type GameMode,
+} from "@/lib/game/modes";
 import type { Stroke, StrokePoint } from "@/lib/quickdraw/raster";
 
 type DrawCanvasProps = {
   disabled: boolean;
+  mode: GameMode;
   prompt: string | undefined;
   promptId: string | undefined;
   classify: (
@@ -33,6 +39,8 @@ export type CanvasOutcome = {
   kind: "recognized" | "skipped";
   prompt: string;
   confidence?: number;
+  strokeCount?: number;
+  misdirected?: boolean;
 };
 
 const CANVAS_WIDTH = 720;
@@ -44,6 +52,7 @@ const SKIPPED_HOLD_MS = 650;
 
 export function DrawCanvas({
   disabled,
+  mode,
   prompt,
   promptId,
   classify,
@@ -65,11 +74,14 @@ export function DrawCanvas({
   const inferenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognizedGuessRef = useRef<string | null>(null);
   const pendingRecognitionRef = useRef<PendingRecognition | null>(null);
+  const misdirectedRef = useRef(false);
   const outcomeRef = useRef<CanvasOutcome | null>(null);
   const sketchRevisionRef = useRef(0);
   const inferenceGenerationRef = useRef(0);
   const historyRef = useRef<ImageData[]>([]);
   const [hasInk, setHasInk] = useState(false);
+  const [strokeCount, setStrokeCount] = useState(0);
+  const [misdirectionArmed, setMisdirectionArmed] = useState(false);
   const [rawPredictions, setRawPredictions] = useState<Prediction[]>([]);
   const [outcome, setOutcome] = useState<CanvasOutcome | null>(null);
   const guessState = useAnimatedGuesses(rawPredictions, { resetKey: promptId ?? prompt });
@@ -109,6 +121,7 @@ export function DrawCanvas({
     activeStrokeRef.current = null;
     recognizedGuessRef.current = null;
     pendingRecognitionRef.current = null;
+    misdirectedRef.current = false;
     outcomeRef.current = null;
     sketchRevisionRef.current += 1;
     inferenceGenerationRef.current += 1;
@@ -119,6 +132,8 @@ export function DrawCanvas({
     }
     stopDrawingSound();
     setHasInk(false);
+    setStrokeCount(0);
+    setMisdirectionArmed(false);
     setRawPredictions([]);
     setOutcome(null);
     onOutcomeChangeRef.current?.(null);
@@ -182,6 +197,8 @@ export function DrawCanvas({
       predictions,
       recognized,
       savedAt: Date.now(),
+      strokeCount: strokesRef.current.length,
+      misdirected: misdirectedRef.current,
     };
 
     onSketchChange?.(drawing);
@@ -201,9 +218,14 @@ export function DrawCanvas({
     inferenceGenerationRef.current += 1;
     queuedInferenceRef.current = null;
     pendingRecognitionRef.current = null;
-    outcomeRef.current = nextOutcome;
-    setOutcome(nextOutcome);
-    onOutcomeChangeRef.current?.(nextOutcome);
+    const outcomeWithMetrics: CanvasOutcome = {
+      ...nextOutcome,
+      strokeCount: strokesRef.current.length,
+      misdirected: misdirectedRef.current,
+    };
+    outcomeRef.current = outcomeWithMetrics;
+    setOutcome(outcomeWithMetrics);
+    onOutcomeChangeRef.current?.(outcomeWithMetrics);
 
     const drawing = hasInk ? saveSketch(predictions, recognized) : null;
     if (recognized && drawing) {
@@ -250,6 +272,7 @@ export function DrawCanvas({
     prompt,
     promptId,
     rawPredictions,
+    mode,
   ]);
 
   async function runInference(finalPass = false) {
@@ -275,6 +298,20 @@ export function DrawCanvas({
         revision === sketchRevisionRef.current &&
         !outcomeRef.current
       ) {
+        const matchedPrediction = prompt
+          ? predictions.find((prediction) => isMatchingPrediction(prompt, prediction))
+          : undefined;
+        const topPrediction = predictions[0];
+        if (
+          mode === "misdirection" &&
+          !matchedPrediction &&
+          topPrediction &&
+          !isMatchingPrediction(prompt ?? "", topPrediction) &&
+          topPrediction.confidence >= MISDIRECTION_CONFIDENCE
+        ) {
+          misdirectedRef.current = true;
+          setMisdirectionArmed(true);
+        }
         setRawPredictions(predictions);
       }
     } catch {
@@ -329,6 +366,7 @@ export function DrawCanvas({
     lastPointRef.current = point;
     activeStrokeRef.current = [point];
     strokesRef.current = [...strokesRef.current, activeStrokeRef.current];
+    setStrokeCount(strokesRef.current.length);
     sketchRevisionRef.current += 1;
 
     context.fillStyle = "#1a1a1a";
@@ -416,6 +454,7 @@ export function DrawCanvas({
 
     context.putImageData(previous, 0, 0);
     strokesRef.current = strokesRef.current.slice(0, -1);
+    setStrokeCount(strokesRef.current.length);
     sketchRevisionRef.current += 1;
     activeStrokeRef.current = null;
     const hasPreviousInk = historyRef.current.length > 0;
@@ -450,6 +489,15 @@ export function DrawCanvas({
           <strong>{outcome?.prompt ?? prompt ?? "Waiting..."}</strong>
         </div>
         <div className="toolbar-actions">
+          <span className={`canvas-mode-meter canvas-mode-meter-${mode}`}>
+            {mode === "minimal"
+              ? `${strokeCount} stroke${strokeCount === 1 ? "" : "s"}`
+              : mode === "misdirection"
+                ? misdirectionArmed
+                  ? "Trick armed ✓"
+                  : "Fool it first"
+                : "100 per solve"}
+          </span>
           <button className="button secondary" disabled={disabled || !hasInk} onClick={undo} type="button">
             Undo
           </button>
@@ -479,7 +527,7 @@ export function DrawCanvas({
             ref={canvasRef}
             width={CANVAS_WIDTH}
           />
-          {outcome ? <CanvasOutcomeCard outcome={outcome} /> : null}
+          {outcome ? <CanvasOutcomeCard mode={mode} outcome={outcome} /> : null}
         </div>
       </SketchyBorder>
     </section>
@@ -494,8 +542,9 @@ type PendingRecognition = {
   predictions: Prediction[];
 };
 
-function CanvasOutcomeCard({ outcome }: { outcome: CanvasOutcome }) {
+function CanvasOutcomeCard({ mode, outcome }: { mode: GameMode; outcome: CanvasOutcome }) {
   const recognized = outcome.kind === "recognized";
+  const definition = getGameModeDefinition(mode);
 
   return (
     <div className={`canvas-outcome canvas-outcome-${outcome.kind}`} role="status" aria-live="assertive">
@@ -510,7 +559,13 @@ function CanvasOutcomeCard({ outcome }: { outcome: CanvasOutcome }) {
       <strong>{outcome.prompt}</strong>
       <p>
         {recognized
-          ? `${Math.round((outcome.confidence ?? 0) * 100)}% match · +1 point`
+          ? mode === "minimal"
+            ? `${outcome.strokeCount ?? 0} strokes · ${Math.round((outcome.confidence ?? 0) * 100)}% match`
+            : mode === "misdirection"
+              ? outcome.misdirected
+                ? "Double take landed · full bonus"
+                : "Solved · no misdirection bonus"
+              : definition.scoring
           : "No penalty · fresh prompt coming up"}
       </p>
     </div>

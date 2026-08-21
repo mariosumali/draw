@@ -1,3 +1,5 @@
+import type { GameMode } from "@/lib/game/modes";
+
 export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 6;
 export const DEFAULT_MAX_PLAYERS = 2;
@@ -22,6 +24,10 @@ export type DrawingSnapshot = {
   predictions: Prediction[];
   recognized: boolean;
   savedAt: number;
+  /** Pen-down gestures used for mode scoring. */
+  strokeCount?: number;
+  /** Whether a confident wrong guess appeared before the correct one. */
+  misdirected?: boolean;
 };
 
 export type PlayerState = {
@@ -51,6 +57,7 @@ export type GameState = {
   spectators: number;
   chatMessages: RoomChatMessage[];
   prompts: string[];
+  mode: GameMode;
   maxPlayers: number;
   roundDurationMs: number;
   serverNow: number;
@@ -76,6 +83,7 @@ export type ClientMessage =
       playerId: string;
       maxPlayers?: number;
       roundDurationMs?: number;
+      mode?: GameMode;
     }
   | {
       type: "deleteLobby";
@@ -92,6 +100,8 @@ export type ClientMessage =
       prompt: string;
       confidence: number;
       predictions: Prediction[];
+      strokeCount?: number;
+      misdirected?: boolean;
     }
   | {
       type: "skipPrompt";

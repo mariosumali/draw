@@ -13,9 +13,9 @@ import { MAX_PLAYERS } from "@/lib/game/types";
 
 const landingFeatures = [
   `Up to ${MAX_PLAYERS} players per room`,
+  "Three genuinely different scoring modes",
   "Share an invite link in 1 click",
   "AI guesses your sketch in real time",
-  "No sign-up. No download.",
 ] as const;
 
 export default function Home() {
@@ -64,9 +64,8 @@ export default function Home() {
             </span>
           </h1>
           <p className="hero-copy">
-            Real-time multiplayer drawing rooms. Set the timer, pick how many people can join, share the link,
-            and race through <span className="highlight">Quick Draw prompts</span>{" "}
-            while a model tries to guess what you&apos;re scribbling.
+            Real-time multiplayer drawing rooms. Pick a race, precision, or misdirection challenge, share the
+            link, and turn <span className="highlight">live AI guesses</span> into the competition.
           </p>
           <ul className="feature-list">
             {landingFeatures.map((feature) => (

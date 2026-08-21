@@ -1,4 +1,6 @@
 node_modules
+.DS_Store
+.webui_secret_key
 .next
 .partykit
 out

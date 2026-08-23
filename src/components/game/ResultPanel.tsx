@@ -3,7 +3,7 @@
 import { DoodleDecoration } from "@/components/ui/DoodleDecoration";
 import { isMatchingPrediction } from "@/lib/game/guesses";
 import { getGameModeDefinition, scorePrompt, type GameMode } from "@/lib/game/modes";
-import type { DrawingSnapshot, GameState, PlayerState } from "@/lib/game/types";
+import type { DrawingSnapshot, GameState, PlayerState, RoundSubmission } from "@/lib/game/types";
 
 type ResultPanelProps = {
   drawings: DrawingSnapshot[];
@@ -23,7 +23,9 @@ export function ResultPanel({ drawings, state, localPlayer, onReset }: ResultPan
   const topScore = Math.max(0, ...state.players.map((player) => player.score));
   const sortedPlayers = [...state.players].sort((a, b) => b.score - a.score || a.slot - b.slot);
   const sortedDrawings = [...drawings].sort((a, b) => a.savedAt - b.savedAt);
-  const mode = getGameModeDefinition(state.mode);
+  const matchGallery = state.roundHistory.flatMap((round) =>
+    round.submissions.map((submission) => ({ submission, mode: round.mode, roundIndex: round.roundIndex })),
+  );
 
   return (
     <>
@@ -33,7 +35,7 @@ export function ResultPanel({ drawings, state, localPlayer, onReset }: ResultPan
           <div className="result-trophy" aria-hidden="true">
             <DoodleDecoration color={isTie ? "#5f8fb4" : "#d88700"} size={64} type="trophy" />
           </div>
-          <p className="eyebrow">{mode.name} · time&apos;s up</p>
+          <p className="eyebrow">Party Show · {state.roundCount} rounds complete</p>
           <h2 id="result-title">
             {isTie ? "It's a tie!" : localWon ? "You win!" : `${winner?.name ?? "Opponent"} wins!`}
           </h2>
@@ -64,10 +66,21 @@ export function ResultPanel({ drawings, state, localPlayer, onReset }: ResultPan
 
         <section className="drawing-review" aria-labelledby="drawing-review-title">
           <div className="drawing-review-heading">
-            <h3 id="drawing-review-title">Your drawings</h3>
-            <span>{sortedDrawings.length} saved</span>
+            <h3 id="drawing-review-title">Match gallery</h3>
+            <span>{matchGallery.length || sortedDrawings.length} sketches</span>
           </div>
-          {sortedDrawings.length ? (
+          {matchGallery.length ? (
+            <div className="drawing-grid">
+              {matchGallery.map(({ submission, mode: roundMode, roundIndex }) => (
+                <SubmissionCard
+                  key={`${roundIndex}:${submission.playerId}`}
+                  mode={roundMode}
+                  roundIndex={roundIndex}
+                  submission={submission}
+                />
+              ))}
+            </div>
+          ) : sortedDrawings.length ? (
             <div className="drawing-grid">
               {sortedDrawings.map((drawing) => (
                 <DrawingCard drawing={drawing} key={drawing.id} mode={state.mode} />
@@ -91,6 +104,39 @@ export function ResultPanel({ drawings, state, localPlayer, onReset }: ResultPan
         </div>
       </section>
     </>
+  );
+}
+
+function SubmissionCard({
+  submission,
+  mode,
+  roundIndex,
+}: {
+  submission: RoundSubmission;
+  mode: GameMode;
+  roundIndex: number;
+}) {
+  const rule = getGameModeDefinition(mode);
+  const wrongGuess = submission.predictions.find((prediction) =>
+    !isMatchingPrediction(submission.prompt, prediction),
+  );
+
+  return (
+    <article className="drawing-card">
+      <div
+        aria-label={`${submission.playerName}'s drawing of ${submission.prompt}`}
+        className="drawing-card-image"
+        role="img"
+        style={submission.imageDataUrl ? { backgroundImage: `url("${submission.imageDataUrl}")` } : undefined}
+      />
+      <div>
+        <strong>{submission.prompt}</strong>
+        <small>
+          R{roundIndex + 1} · {submission.playerName} · {rule.name} · {submission.recognized ? `+${submission.award}` : "unsolved"}
+        </small>
+        {wrongGuess ? <small>AI first tried “{wrongGuess.label}”</small> : null}
+      </div>
+    </article>
   );
 }
 

@@ -4,13 +4,15 @@ export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 6;
 export const DEFAULT_MAX_PLAYERS = 2;
 export const COUNTDOWN_MS = 3_000;
-export const MIN_ROUND_DURATION_MS = 45_000;
-export const ROUND_DURATION_MS = 90_000;
+export const PARTY_ROUND_COUNT = 5;
+export const ROUND_REVEAL_MS = 6_000;
+export const MIN_ROUND_DURATION_MS = 20_000;
+export const ROUND_DURATION_MS = 30_000;
 export const MAX_ROUND_DURATION_MS = 180_000;
 export const RECOGNITION_CONFIDENCE = 0.45;
 export const RECOGNITION_TOP_N = 5;
 
-export type GamePhase = "waiting" | "countdown" | "playing" | "finished";
+export type GamePhase = "waiting" | "countdown" | "playing" | "reveal" | "finished";
 
 export type Prediction = {
   label: string;
@@ -39,7 +41,30 @@ export type PlayerState = {
   score: number;
   promptIndex: number;
   completedPrompts: string[];
+  roundDone: boolean;
+  lastAward: number;
   lastSeen: number;
+};
+
+export type RoundSubmission = {
+  playerId: string;
+  playerName: string;
+  prompt: string;
+  recognized: boolean;
+  award: number;
+  confidence: number;
+  strokeCount: number;
+  misdirected: boolean;
+  imageDataUrl?: string;
+  predictions: Prediction[];
+  submittedAt: number;
+};
+
+export type PartyRoundResult = {
+  roundIndex: number;
+  prompt: string;
+  mode: GameMode;
+  submissions: RoundSubmission[];
 };
 
 export type RoomChatMessage = {
@@ -58,12 +83,17 @@ export type GameState = {
   chatMessages: RoomChatMessage[];
   prompts: string[];
   mode: GameMode;
+  roundIndex: number;
+  roundCount: number;
+  roundSubmissions: RoundSubmission[];
+  roundHistory: PartyRoundResult[];
   maxPlayers: number;
   roundDurationMs: number;
   serverNow: number;
   countdownStartedAt?: number;
   startedAt?: number;
   endsAt?: number;
+  revealEndsAt?: number;
   winnerId?: string | null;
 };
 
@@ -102,11 +132,16 @@ export type ClientMessage =
       predictions: Prediction[];
       strokeCount?: number;
       misdirected?: boolean;
+      imageDataUrl?: string;
     }
   | {
       type: "skipPrompt";
       playerId: string;
       prompt: string;
+      predictions?: Prediction[];
+      strokeCount?: number;
+      misdirected?: boolean;
+      imageDataUrl?: string;
     }
   | {
       type: "reset";

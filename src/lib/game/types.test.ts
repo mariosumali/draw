@@ -37,6 +37,8 @@ function player(id: string, score: number): PlayerState {
     connected: true,
     promptIndex: score,
     completedPrompts: [],
+    roundDone: false,
+    lastAward: 0,
     lastSeen: 0,
   };
 }

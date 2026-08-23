@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const imageAlt = "Draw Battle! Quick Draw multiplayer social card.";
+export const imageAlt = "Draw Battle! Five playful ways to draw with AI.";
 export const imageSize = {
   width: 1200,
   height: 630,
@@ -90,7 +90,7 @@ export function createDrawBattleShareImage() {
               textTransform: "uppercase",
             }}
           >
-            Quick Draw multiplayer
+            Five ways to draw with AI
           </div>
           <div
             style={{

@@ -1,7 +1,7 @@
 import type * as Party from "partykit/server";
 
 import { createPromptDeck } from "../src/lib/game/prompts";
-import { DEFAULT_GAME_MODE, isGameMode, scorePrompt } from "../src/lib/game/modes";
+import { DEFAULT_GAME_MODE, getRoundMode, isGameMode, scorePrompt } from "../src/lib/game/modes";
 import {
   COUNTDOWN_MS,
   DEFAULT_MAX_PLAYERS,
@@ -9,7 +9,9 @@ import {
   MIN_PLAYERS,
   MAX_ROUND_DURATION_MS,
   MIN_ROUND_DURATION_MS,
+  PARTY_ROUND_COUNT,
   ROUND_DURATION_MS,
+  ROUND_REVEAL_MS,
   RECOGNITION_TOP_N,
   getWinnerId,
   isRecognizedPrompt,
@@ -139,6 +141,8 @@ export default class DrawBattleRoom implements Party.Server {
       score: 0,
       promptIndex: 0,
       completedPrompts: [],
+      roundDone: false,
+      lastAward: 0,
       lastSeen: Date.now(),
     };
 
@@ -260,11 +264,11 @@ export default class DrawBattleRoom implements Party.Server {
     }
 
     const player = this.state.players.find((candidate) => candidate.id === message.playerId);
-    if (!player) {
+    if (!player || player.roundDone) {
       return;
     }
 
-    const currentPrompt = this.state.prompts[player.promptIndex];
+    const currentPrompt = this.state.prompts[this.state.roundIndex];
     if (!currentPrompt || currentPrompt !== message.prompt) {
       return;
     }
@@ -277,7 +281,8 @@ export default class DrawBattleRoom implements Party.Server {
     const matchedPrediction = message.predictions
       .slice(0, RECOGNITION_TOP_N)
       .find((prediction) => normalizeLabel(prediction.label) === normalizedPrompt);
-    const award = scorePrompt(this.state.mode, {
+    const roundMode = getRoundMode(this.state.mode, this.state.roundIndex);
+    const award = scorePrompt(roundMode, {
       confidence: matchedPrediction?.confidence ?? 0,
       strokeCount: message.strokeCount ?? 99,
       misdirected: Boolean(message.misdirected),
@@ -285,10 +290,25 @@ export default class DrawBattleRoom implements Party.Server {
 
     player.score += award;
     player.completedPrompts.push(currentPrompt);
-    player.promptIndex += 1;
+    player.roundDone = true;
+    player.lastAward = award;
     player.lastSeen = Date.now();
+    this.state.roundSubmissions.push({
+      playerId: player.id,
+      playerName: player.name,
+      prompt: currentPrompt,
+      recognized: true,
+      award,
+      confidence: matchedPrediction?.confidence ?? 0,
+      strokeCount: clamp(Math.round(message.strokeCount ?? 99), 0, 99),
+      misdirected: Boolean(message.misdirected),
+      imageDataUrl: sanitizeImageDataUrl(message.imageDataUrl),
+      predictions: sanitizePredictions(message.predictions),
+      submittedAt: Date.now(),
+    });
 
     this.broadcastState();
+    this.revealWhenEveryoneIsDone();
   }
 
   private skipPrompt(message: Extract<ClientMessage, { type: "skipPrompt" }>) {
@@ -297,18 +317,33 @@ export default class DrawBattleRoom implements Party.Server {
     }
 
     const player = this.state.players.find((candidate) => candidate.id === message.playerId);
-    if (!player) {
+    if (!player || player.roundDone) {
       return;
     }
 
-    const currentPrompt = this.state.prompts[player.promptIndex];
+    const currentPrompt = this.state.prompts[this.state.roundIndex];
     if (!currentPrompt || currentPrompt !== message.prompt) {
       return;
     }
 
-    player.promptIndex += 1;
+    player.roundDone = true;
+    player.lastAward = 0;
     player.lastSeen = Date.now();
+    this.state.roundSubmissions.push({
+      playerId: player.id,
+      playerName: player.name,
+      prompt: currentPrompt,
+      recognized: false,
+      award: 0,
+      confidence: 0,
+      strokeCount: clamp(Math.round(message.strokeCount ?? 0), 0, 99),
+      misdirected: Boolean(message.misdirected),
+      imageDataUrl: sanitizeImageDataUrl(message.imageDataUrl),
+      predictions: sanitizePredictions(message.predictions ?? []),
+      submittedAt: Date.now(),
+    });
     this.broadcastState();
+    this.revealWhenEveryoneIsDone();
   }
 
   private startCountdown() {
@@ -334,21 +369,97 @@ export default class DrawBattleRoom implements Party.Server {
     this.state.phase = "playing";
     this.state.startedAt = now;
     this.state.endsAt = now + this.state.roundDurationMs;
+    delete this.state.revealEndsAt;
+    this.state.players.forEach((player) => {
+      player.roundDone = false;
+      player.lastAward = 0;
+    });
     this.broadcastState();
 
     this.finishTimer = setTimeout(() => {
-      this.finishRound();
+      this.beginReveal();
     }, this.state.roundDurationMs);
   }
 
-  private finishRound() {
-    if (this.state.phase === "finished") {
+  private revealWhenEveryoneIsDone() {
+    const activePlayers = this.state.players.filter((player) => player.connected);
+    if (activePlayers.length > 0 && activePlayers.every((player) => player.roundDone)) {
+      this.beginReveal();
+    }
+  }
+
+  private beginReveal() {
+    if (this.state.phase !== "playing") {
       return;
     }
 
+    this.clearTimers();
+    const prompt = this.state.prompts[this.state.roundIndex];
+    for (const player of this.state.players.filter((candidate) => candidate.connected && !candidate.roundDone)) {
+      player.roundDone = true;
+      player.lastAward = 0;
+      this.state.roundSubmissions.push({
+        playerId: player.id,
+        playerName: player.name,
+        prompt,
+        recognized: false,
+        award: 0,
+        confidence: 0,
+        strokeCount: 0,
+        misdirected: false,
+        predictions: [],
+        submittedAt: Date.now(),
+      });
+    }
+
+    this.state.phase = "reveal";
+    this.state.revealEndsAt = Date.now() + ROUND_REVEAL_MS;
+    delete this.state.endsAt;
+    this.state.roundHistory.push({
+      roundIndex: this.state.roundIndex,
+      prompt,
+      mode: getRoundMode(this.state.mode, this.state.roundIndex),
+      submissions: this.state.roundSubmissions.map((submission) => ({ ...submission })),
+    });
+    this.broadcastState();
+
+    this.finishTimer = setTimeout(() => {
+      this.advanceRound();
+    }, ROUND_REVEAL_MS);
+  }
+
+  private advanceRound() {
+    if (this.state.phase !== "reveal") {
+      return;
+    }
+
+    if (this.state.roundIndex + 1 >= this.state.roundCount) {
+      this.finishGame();
+      return;
+    }
+
+    this.clearTimers();
+    this.state.roundIndex += 1;
+    this.state.roundSubmissions = [];
+    this.state.phase = "countdown";
+    this.state.countdownStartedAt = Date.now();
+    delete this.state.revealEndsAt;
+    this.state.players.forEach((player) => {
+      player.promptIndex = this.state.roundIndex;
+      player.roundDone = false;
+      player.lastAward = 0;
+    });
+    this.broadcastState();
+    this.countdownTimer = setTimeout(() => {
+      this.startRound();
+    }, COUNTDOWN_MS);
+  }
+
+  private finishGame() {
+    this.clearTimers();
     this.state.phase = "finished";
     this.state.winnerId = getWinnerId(this.state.players);
-    this.clearTimers();
+    delete this.state.revealEndsAt;
     this.broadcastState();
   }
 
@@ -364,6 +475,8 @@ export default class DrawBattleRoom implements Party.Server {
       score: 0,
       promptIndex: 0,
       completedPrompts: [],
+      roundDone: false,
+      lastAward: 0,
       lastSeen: Date.now(),
     }));
 
@@ -391,6 +504,10 @@ export default class DrawBattleRoom implements Party.Server {
       this.clearTimers();
     }
 
+    if (this.state.phase === "playing") {
+      this.revealWhenEveryoneIsDone();
+    }
+
     if (this.state.phase === "waiting") {
       this.state.players = this.state.players.filter((candidate) => candidate.connected);
       this.state.players.forEach((candidate, slot) => {
@@ -416,6 +533,10 @@ export default class DrawBattleRoom implements Party.Server {
       chatMessages: [],
       prompts: createPromptDeck(`${this.room.id}-${Date.now()}`),
       mode: settings?.mode ?? DEFAULT_GAME_MODE,
+      roundIndex: 0,
+      roundCount: PARTY_ROUND_COUNT,
+      roundSubmissions: [],
+      roundHistory: [],
       maxPlayers: settings?.maxPlayers ?? DEFAULT_MAX_PLAYERS,
       roundDurationMs: settings?.roundDurationMs ?? ROUND_DURATION_MS,
       serverNow: Date.now(),
@@ -465,4 +586,18 @@ export default class DrawBattleRoom implements Party.Server {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function sanitizeImageDataUrl(value: string | undefined) {
+  if (!value || value.length > 400_000 || !/^data:image\/png;base64,[a-z0-9+/=]+$/i.test(value)) {
+    return undefined;
+  }
+  return value;
+}
+
+function sanitizePredictions(predictions: { label: string; confidence: number }[]) {
+  return predictions.slice(0, RECOGNITION_TOP_N).map((prediction) => ({
+    label: prediction.label.trim().slice(0, 64),
+    confidence: clamp(Number.isFinite(prediction.confidence) ? prediction.confidence : 0, 0, 1),
+  }));
 }

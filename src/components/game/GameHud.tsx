@@ -16,6 +16,8 @@ export function GameHud({ receivedAt, state, localPlayer }: GameHudProps) {
   const remainingMs =
     state.phase === "playing" && state.endsAt
       ? Math.max(0, state.endsAt - serverNow)
+      : state.phase === "reveal" && state.revealEndsAt
+        ? Math.max(0, state.revealEndsAt - serverNow)
       : state.roundDurationMs;
   const countdownMs =
     state.phase === "countdown" && state.countdownStartedAt
@@ -44,8 +46,8 @@ export function GameHud({ receivedAt, state, localPlayer }: GameHudProps) {
         </strong>
       </div>
       <div>
-        <span className="hud-label">Players</span>
-        <strong>{state.players.filter((player) => player.connected).length}/{state.maxPlayers}</strong>
+        <span className="hud-label">Round</span>
+        <strong>{state.roundIndex + 1}/{state.roundCount}</strong>
       </div>
     </section>
   );
@@ -55,7 +57,7 @@ function useSyncedServerNow(state: GameState, receivedAt: number) {
   const [clientNow, setClientNow] = useState(() => Date.now());
 
   useEffect(() => {
-    if (state.phase !== "countdown" && state.phase !== "playing") {
+    if (state.phase !== "countdown" && state.phase !== "playing" && state.phase !== "reveal") {
       return;
     }
 
@@ -72,6 +74,10 @@ function useSyncedServerNow(state: GameState, receivedAt: number) {
 function formatPhase(phase: GameState["phase"]) {
   if (phase === "countdown") {
     return "Get ready";
+  }
+
+  if (phase === "reveal") {
+    return "Reveal";
   }
 
   return phase[0].toUpperCase() + phase.slice(1);

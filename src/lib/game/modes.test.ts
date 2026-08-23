@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getGameModeDefinition, isGameMode, scorePrompt } from "@/lib/game/modes";
+import { getGameModeDefinition, getRoundMode, isGameMode, scorePrompt } from "@/lib/game/modes";
 
 describe("game modes", () => {
   it("recognizes only supported mode identifiers", () => {
@@ -31,6 +31,13 @@ describe("game modes", () => {
 
   it("falls back to the default definition", () => {
     expect(getGameModeDefinition().id).toBe("sprint");
+  });
+
+  it("rotates party rules beginning with the host's selection", () => {
+    expect(getRoundMode("minimal", 0)).toBe("minimal");
+    expect(getRoundMode("minimal", 1)).toBe("misdirection");
+    expect(getRoundMode("minimal", 2)).toBe("sprint");
+    expect(getRoundMode("minimal", 3)).toBe("minimal");
   });
 });
 

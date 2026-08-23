@@ -55,6 +55,16 @@ export function getGameModeDefinition(mode: GameMode = DEFAULT_GAME_MODE) {
   return GAME_MODES.find((candidate) => candidate.id === mode) ?? GAME_MODES[0];
 }
 
+/**
+ * Party Show rotates through every rule, beginning with the host's pick. This
+ * keeps the lobby choice meaningful while giving each match a varied arc.
+ */
+export function getRoundMode(startingMode: GameMode, roundIndex: number): GameMode {
+  const startIndex = Math.max(0, GAME_MODE_IDS.indexOf(startingMode));
+  const safeRoundIndex = Math.max(0, Math.floor(roundIndex));
+  return GAME_MODE_IDS[(startIndex + safeRoundIndex) % GAME_MODE_IDS.length];
+}
+
 export function scorePrompt(mode: GameMode, input: PromptScoreInput) {
   const confidence = clamp(input.confidence, 0, 1);
   const strokeCount = clamp(Math.round(input.strokeCount), 1, 99);

@@ -3,7 +3,7 @@ import { Caveat, Patrick_Hand, Kalam } from "next/font/google";
 
 import "./globals.css";
 
-const description = "Grab a pencil and race your friend through 90-second Quick Draw battles!";
+const description = "Five playful ways to draw with an AI: party rounds, a daily gauntlet, telephone chains, model-hacking puzzles, and a creative gallery.";
 const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL ??
   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
@@ -34,7 +34,7 @@ export const metadata: Metadata = {
     template: "%s | Draw Battle!",
   },
   description,
-  keywords: ["drawing game", "quick draw", "multiplayer drawing", "AI sketch recognition"],
+  keywords: ["drawing game", "quick draw", "multiplayer drawing", "daily drawing", "AI sketch recognition"],
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
@@ -50,7 +50,7 @@ export const metadata: Metadata = {
         url: "/opengraph-image",
         width: 1200,
         height: 630,
-        alt: "Draw Battle! Quick Draw multiplayer social card.",
+        alt: "Draw Battle! Five playful ways to draw with AI.",
       },
     ],
   },

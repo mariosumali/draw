@@ -19,8 +19,14 @@ import type { Stroke, StrokePoint } from "@/lib/quickdraw/raster";
 type DrawCanvasProps = {
   disabled: boolean;
   mode: GameMode;
+  recognitionMode?: "automatic" | "manual";
   prompt: string | undefined;
   promptId: string | undefined;
+  meterLabel?: string;
+  manualActionLabel?: string;
+  manualOutcomeLabel?: string;
+  misdirectionTarget?: string;
+  requireMisdirection?: boolean;
   classify: (
     canvas: HTMLCanvasElement,
     strokes: CanvasStroke[],
@@ -29,6 +35,7 @@ type DrawCanvasProps = {
   onPredictions: (predictions: Prediction[]) => void;
   onGuessStateChange?: (guessState: AnimatedGuessSnapshot) => void;
   onRecognized: (drawing: DrawingSnapshot) => void;
+  onSubmit?: (drawing: DrawingSnapshot) => void;
   onSkip?: (drawing: DrawingSnapshot | null) => void;
   onOutcomeChange?: (outcome: CanvasOutcome | null) => void;
   onSketchChange?: (drawing: DrawingSnapshot) => void;
@@ -36,8 +43,10 @@ type DrawCanvasProps = {
 };
 
 export type CanvasOutcome = {
-  kind: "recognized" | "skipped";
+  kind: "recognized" | "skipped" | "submitted";
   prompt: string;
+  label?: string;
+  topGuess?: string;
   confidence?: number;
   strokeCount?: number;
   misdirected?: boolean;
@@ -53,12 +62,19 @@ const SKIPPED_HOLD_MS = 650;
 export function DrawCanvas({
   disabled,
   mode,
+  recognitionMode = "automatic",
   prompt,
   promptId,
+  meterLabel,
+  manualActionLabel = "Submit drawing",
+  manualOutcomeLabel = "Drawing submitted",
+  misdirectionTarget,
+  requireMisdirection = false,
   classify,
   onPredictions,
   onGuessStateChange,
   onRecognized,
+  onSubmit,
   onSkip,
   onOutcomeChange,
   onSketchChange,
@@ -205,7 +221,11 @@ export function DrawCanvas({
     return drawing;
   }, [onSketchChange, prompt, promptId]);
 
-  const beginOutcome = useCallback((nextOutcome: CanvasOutcome, predictions: Prediction[], recognized: boolean) => {
+  const beginOutcome = useCallback((
+    nextOutcome: CanvasOutcome,
+    predictions: Prediction[],
+    action: "recognize" | "skip" | "submit",
+  ) => {
     if (outcomeRef.current || !prompt) {
       return;
     }
@@ -227,19 +247,25 @@ export function DrawCanvas({
     setOutcome(outcomeWithMetrics);
     onOutcomeChangeRef.current?.(outcomeWithMetrics);
 
+    const recognized = action === "recognize";
     const drawing = hasInk ? saveSketch(predictions, recognized) : null;
-    if (recognized && drawing) {
+    if (action === "recognize" && drawing) {
       onRecognized(drawing);
-    } else if (!recognized) {
+    } else if (action === "submit" && drawing) {
+      onSubmit?.(drawing);
+    } else if (action === "skip") {
       onSkip?.(drawing);
     }
-  }, [hasInk, onRecognized, onSkip, prompt, saveSketch]);
+  }, [hasInk, onRecognized, onSkip, onSubmit, prompt, saveSketch]);
 
   useEffect(() => {
     const matchedPrediction = prompt
       ? rawPredictions.find((prediction) => isMatchingPrediction(prompt, prediction))
       : undefined;
-    if (!prompt || !matchedPrediction) {
+    if (recognitionMode !== "automatic" || !prompt || !matchedPrediction) {
+      return;
+    }
+    if (requireMisdirection && !misdirectedRef.current) {
       return;
     }
 
@@ -265,7 +291,7 @@ export function DrawCanvas({
     beginOutcome(
       { kind: "recognized", prompt, confidence: matchedPrediction.confidence },
       rawPredictions,
-      true,
+      "recognize",
     );
   }, [
     beginOutcome,
@@ -273,6 +299,8 @@ export function DrawCanvas({
     promptId,
     rawPredictions,
     mode,
+    recognitionMode,
+    requireMisdirection,
   ]);
 
   async function runInference(finalPass = false) {
@@ -304,9 +332,10 @@ export function DrawCanvas({
         const topPrediction = predictions[0];
         if (
           mode === "misdirection" &&
-          !matchedPrediction &&
           topPrediction &&
-          !isMatchingPrediction(prompt ?? "", topPrediction) &&
+          (misdirectionTarget
+            ? isMatchingPrediction(misdirectionTarget, topPrediction)
+            : !matchedPrediction && !isMatchingPrediction(prompt ?? "", topPrediction)) &&
           topPrediction.confidence >= MISDIRECTION_CONFIDENCE
         ) {
           misdirectedRef.current = true;
@@ -432,7 +461,7 @@ export function DrawCanvas({
           confidence: pendingRecognition.prediction.confidence,
         },
         pendingRecognition.predictions,
-        true,
+        "recognize",
       );
       return;
     }
@@ -475,7 +504,24 @@ export function DrawCanvas({
       return;
     }
 
-    beginOutcome({ kind: "skipped", prompt }, rawPredictions, false);
+    beginOutcome({ kind: "skipped", prompt }, rawPredictions, "skip");
+  }
+
+  function submitDrawing() {
+    if (disabled || outcomeRef.current || !prompt || !onSubmit || !hasInk) {
+      return;
+    }
+
+    beginOutcome(
+      {
+        kind: "submitted",
+        prompt,
+        label: manualOutcomeLabel,
+        topGuess: rawPredictions[0]?.label,
+      },
+      rawPredictions,
+      "submit",
+    );
   }
 
   return (
@@ -490,13 +536,15 @@ export function DrawCanvas({
         </div>
         <div className="toolbar-actions">
           <span className={`canvas-mode-meter canvas-mode-meter-${mode}`}>
-            {mode === "minimal"
+            {meterLabel ?? (mode === "minimal"
               ? `${strokeCount} stroke${strokeCount === 1 ? "" : "s"}`
               : mode === "misdirection"
                 ? misdirectionArmed
-                  ? "Trick armed ✓"
-                  : "Fool it first"
-                : "100 per solve"}
+                  ? `${misdirectionTarget ?? "Trick"} armed ✓`
+                  : misdirectionTarget
+                    ? `Get ${misdirectionTarget} first`
+                    : "Fool it first"
+                : "100 per solve")}
           </span>
           <button className="button secondary" disabled={disabled || !hasInk} onClick={undo} type="button">
             Undo
@@ -507,6 +555,11 @@ export function DrawCanvas({
           {onSkip ? (
             <button className="button secondary canvas-skip-button" disabled={disabled} onClick={skipPrompt} type="button">
               Pass
+            </button>
+          ) : null}
+          {onSubmit ? (
+            <button className="button canvas-submit-button" disabled={disabled || !hasInk} onClick={submitDrawing} type="button">
+              {manualActionLabel}
             </button>
           ) : null}
         </div>
@@ -544,6 +597,7 @@ type PendingRecognition = {
 
 function CanvasOutcomeCard({ mode, outcome }: { mode: GameMode; outcome: CanvasOutcome }) {
   const recognized = outcome.kind === "recognized";
+  const submitted = outcome.kind === "submitted";
   const definition = getGameModeDefinition(mode);
 
   return (
@@ -552,10 +606,10 @@ function CanvasOutcomeCard({ mode, outcome }: { mode: GameMode; outcome: CanvasO
         <DoodleDecoration
           color={recognized ? "#2e7d32" : "#555"}
           size={54}
-          type={recognized ? "checkmark" : "arrow"}
+          type={recognized ? "checkmark" : submitted ? "bot" : "arrow"}
         />
       </span>
-      <small>{recognized ? "The AI got it" : "Passed"}</small>
+      <small>{recognized ? "The AI got it" : submitted ? outcome.label : "Passed"}</small>
       <strong>{outcome.prompt}</strong>
       <p>
         {recognized
@@ -566,7 +620,11 @@ function CanvasOutcomeCard({ mode, outcome }: { mode: GameMode; outcome: CanvasO
                 ? "Double take landed · full bonus"
                 : "Solved · no misdirection bonus"
               : definition.scoring
-          : "No penalty · fresh prompt coming up"}
+          : submitted
+            ? outcome.topGuess
+              ? `The AI calls it “${outcome.topGuess}”`
+              : "Saved without a confident AI guess"
+            : "No penalty · reveal coming up"}
       </p>
     </div>
   );

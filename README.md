@@ -1,16 +1,22 @@
 # Draw Battle
 
-Draw Battle is a real-time multiplayer drawing race. Two to six players join the same invite room, ready up, and race to draw prompts that an in-browser Quick Draw CNN recognizes.
+Draw Battle is a collection of drawing games built around an in-browser Quick Draw CNN. It includes a two-to-six-player Party Show plus four standalone experiments for solo play.
 
-## Gameplay Modes
+## Ways to Play
 
-The room creator chooses one of three loops before everyone readies up:
+- **Party Show** is a five-round multiplayer match. Everyone draws the same prompt, successful recognition locks the player's result without cutting off a stroke, and the round waits for everyone before showing the sketches side by side.
+- **Daily Gauntlet** gives every player the same six seeded prompts each day, thirty seconds per prompt, and three lives. Daily bests persist on the device.
+- **AI Telephone** turns the recognizer's top interpretation into the next drawing prompt across a four-link chain, then reveals how the meaning drifted.
+- **Model Hacker** asks for a specific decoy guess before the true target can score, turning model steering into a five-puzzle run.
+- **Creative Gallery** removes the clock and adds titles, downloads, remixes, and a device-local sketchbook.
+
+Party Show rotates through three round rules, beginning with the room creator's pick:
 
 - **Speed Run** is the direct race: every recognized prompt is worth 100 points, so throughput wins.
 - **Ink Golf** rewards economical drawings. Every pen-down counts, and extra strokes reduce the award for a recognized prompt.
 - **Double Take** rewards transformation. First make the recognizer confidently guess the wrong object, then turn the same sketch into the real prompt for a 400-point bonus.
 
-Recognition records the completed sketch only after the active stroke ends, so the AI never pulls the canvas away mid-line. Every match closes with scores and the player's saved drawings.
+Recognition records the completed sketch only after the active stroke ends, so the AI never pulls the canvas away mid-line. Party matches end with scores and a gallery containing every player's round submissions.
 
 ## Run Locally
 

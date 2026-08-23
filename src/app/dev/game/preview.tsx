@@ -215,6 +215,10 @@ function createPreviewState(now: number): GameState {
     ],
     prompts: PROMPTS,
     mode: "misdirection",
+    roundIndex: 1,
+    roundCount: 5,
+    roundSubmissions: [],
+    roundHistory: [],
     maxPlayers: players.length,
     roundDurationMs: ROUND_DURATION_MS,
     serverNow: now,
@@ -234,6 +238,8 @@ function player(id: string, name: string, slot: number, score: number, promptInd
     connected: true,
     promptIndex,
     completedPrompts: PROMPTS.slice(0, promptIndex),
+    roundDone: false,
+    lastAward: 0,
     lastSeen: now,
   };
 }

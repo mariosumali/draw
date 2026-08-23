@@ -17,6 +17,7 @@ import { isMatchingPrediction } from "@/lib/game/guesses";
 import {
   GAME_MODES,
   getGameModeDefinition,
+  getRoundMode,
   scorePrompt,
   type GameMode,
 } from "@/lib/game/modes";
@@ -39,7 +40,7 @@ type RoomClientProps = {
 };
 
 const PARTYKIT_HOST = process.env.NEXT_PUBLIC_PARTYKIT_HOST ?? "localhost:1999";
-const ROUND_DURATION_OPTIONS_MS = [45_000, 60_000, 90_000, 120_000];
+const ROUND_DURATION_OPTIONS_MS = [20_000, 30_000, 45_000, 60_000];
 const PLAYER_COUNT_OPTIONS = Array.from(
   { length: MAX_PLAYERS - MIN_PLAYERS + 1 },
   (_, index) => MIN_PLAYERS + index,
@@ -116,15 +117,20 @@ export function RoomClient({ roomId, initialName }: RoomClientProps) {
     return gameState?.players.find((player) => player.id === playerId);
   }, [gameState?.players, playerId]);
 
-  const currentPrompt = localPlayer ? gameState?.prompts[localPlayer.promptIndex] : undefined;
+  const currentPrompt = gameState?.prompts[gameState.roundIndex];
   const opponents = gameState?.players.filter((player) => player.id !== playerId && player.connected) ?? [];
   const connectedPlayers = gameState?.players.filter((player) => player.connected) ?? [];
   const readyPlayers = connectedPlayers.filter((player) => player.ready);
   const inviteUrl = typeof window === "undefined" ? "" : window.location.href.split("?")[0];
   const recognizerReady = recognizerLoadState === "ready";
   const canDraw =
-    gameState?.phase === "playing" && Boolean(currentPrompt) && recognizerReady && !modelError && !recognizerLoadError;
-  const currentPromptId = localPlayer && currentPrompt ? `${localPlayer.promptIndex}:${currentPrompt}` : undefined;
+    gameState?.phase === "playing" &&
+    !localPlayer?.roundDone &&
+    Boolean(currentPrompt) &&
+    recognizerReady &&
+    !modelError &&
+    !recognizerLoadError;
+  const currentPromptId = localPlayer && currentPrompt ? `${gameState?.roundIndex}:${currentPrompt}` : undefined;
   const shouldShowLeaveConfirm = gameState?.phase === "waiting" && showLeaveConfirm;
   const isWaiting = gameState?.phase === "waiting";
   const openSeatCount = gameState ? Math.max(0, gameState.maxPlayers - connectedPlayers.length) : 0;
@@ -180,6 +186,7 @@ export function RoomClient({ roomId, initialName }: RoomClientProps) {
         predictions: drawing.predictions,
         strokeCount: drawing.strokeCount,
         misdirected: drawing.misdirected,
+        imageDataUrl: drawing.imageDataUrl,
       });
     },
     [currentPrompt, playerId, saveDrawing, sendMessage],
@@ -194,7 +201,15 @@ export function RoomClient({ roomId, initialName }: RoomClientProps) {
       if (drawing) {
         saveDrawing(drawing);
       }
-      sendMessage({ type: "skipPrompt", playerId, prompt: currentPrompt });
+      sendMessage({
+        type: "skipPrompt",
+        playerId,
+        prompt: currentPrompt,
+        predictions: drawing?.predictions,
+        strokeCount: drawing?.strokeCount,
+        misdirected: drawing?.misdirected,
+        imageDataUrl: drawing?.imageDataUrl,
+      });
     },
     [currentPrompt, playerId, saveDrawing, sendMessage],
   );
@@ -387,14 +402,14 @@ export function RoomClient({ roomId, initialName }: RoomClientProps) {
                       value={gameState.maxPlayers}
                     />
                     <LobbyReadOnlySetting
-                      hint="shared challenge order"
-                      label="Prompt deck"
-                      value={`${gameState.prompts.length} cards`}
+                      hint="shared prompts with a reveal after each"
+                      label="Show length"
+                      value={`${gameState.roundCount} rounds`}
                     />
                     <LobbyReadOnlySetting
-                      hint="how this mode rewards a solve"
-                      label="Scoring"
-                      value={getGameModeDefinition(gameState.mode).eyebrow}
+                      hint="rules rotate from your selected opener"
+                      label="Rule playlist"
+                      value="All 3 modes"
                     />
                   </div>
 
@@ -575,16 +590,16 @@ export function BattleStage({
   state: GameState;
 }) {
   const [canvasOutcome, setCanvasOutcome] = useState<CanvasOutcome | null>(null);
-  const roundNumber = Math.min((localPlayer?.promptIndex ?? 0) + 1, state.prompts.length);
+  const roundNumber = state.roundIndex + 1;
   const opponentNames = opponents.map((player) => player.name).join(", ");
   const watcherCount = state.players.filter((player) => player.connected).length + state.spectators;
   const displayedPrompt = canvasOutcome?.prompt ?? currentPrompt;
   const solvedCount = localPlayer?.completedPrompts.length ?? 0;
-  const promptsSeen = Math.min(localPlayer?.promptIndex ?? 0, state.prompts.length);
-  const promptsRemaining = Math.max(0, state.prompts.length - promptsSeen);
-  const modeDefinition = getGameModeDefinition(state.mode);
+  const promptsRemaining = Math.max(0, state.roundCount - roundNumber);
+  const activeMode = getRoundMode(state.mode, state.roundIndex);
+  const modeDefinition = getGameModeDefinition(activeMode);
   const outcomeAward = canvasOutcome?.kind === "recognized"
-    ? scorePrompt(state.mode, {
+    ? scorePrompt(activeMode, {
         confidence: canvasOutcome.confidence ?? 0,
         strokeCount: canvasOutcome.strokeCount ?? 99,
         misdirected: Boolean(canvasOutcome.misdirected),
@@ -604,7 +619,9 @@ export function BattleStage({
               ? `Sketch solved · +${outcomeAward} points`
               : canvasOutcome?.kind === "skipped"
                 ? "Passed · no penalty"
-                : `${modeDefinition.name} · sketch ${roundNumber} of ${state.prompts.length}`}
+                : state.phase === "reveal"
+                  ? `Round ${roundNumber} reveal`
+                  : `${modeDefinition.name} · round ${roundNumber} of ${state.roundCount}`}
           </span>
           <strong>
             <span>&quot;</span>
@@ -629,7 +646,9 @@ export function BattleStage({
         </div>
       ) : null}
 
-      <div className="battle-layout">
+      {state.phase === "reveal" ? (
+        <RoundRevealPanel localPlayer={localPlayer} receivedAt={receivedAt} state={state} />
+      ) : <div className="battle-layout">
         <div className="battle-canvas-column">
           {state.phase === "countdown" ? (
             <div className="battle-countdown-note">
@@ -646,7 +665,7 @@ export function BattleStage({
           <DrawCanvas
             classify={classify}
             disabled={!canDraw}
-            mode={state.mode}
+            mode={activeMode}
             onGuessStateChange={onGuessStateChange}
             onOutcomeChange={setCanvasOutcome}
             onPredictions={onPredictions}
@@ -669,7 +688,7 @@ export function BattleStage({
           <ScoreboardPanel localPlayer={localPlayer} state={state} />
           <GuessFeedPanel guessState={guessState} predictions={predictions} prompt={displayedPrompt} />
         </aside>
-      </div>
+      </div>}
 
       <footer className="battle-footer">
         <p>
@@ -677,9 +696,72 @@ export function BattleStage({
           <strong>{modeDefinition.name}:</strong> {modeDefinition.rules}
         </p>
         <span>
-          {solvedCount} solved · {watcherCount} watching · {opponentNames ? `vs. ${opponentNames}` : "waiting for rivals"}
+          round {roundNumber}/{state.roundCount} · {watcherCount} watching · {opponentNames ? `vs. ${opponentNames}` : "waiting for rivals"}
         </span>
       </footer>
+    </section>
+  );
+}
+
+function RoundRevealPanel({
+  state,
+  localPlayer,
+  receivedAt,
+}: {
+  state: GameState;
+  localPlayer: PlayerState | undefined;
+  receivedAt: number;
+}) {
+  const serverNow = useSyncedServerNow(state, receivedAt);
+  const remainingMs = state.revealEndsAt ? Math.max(0, state.revealEndsAt - serverNow) : 0;
+  const submissions = [...state.roundSubmissions].sort((a, b) => b.award - a.award || a.submittedAt - b.submittedAt);
+  const mode = getGameModeDefinition(getRoundMode(state.mode, state.roundIndex));
+
+  return (
+    <section className="round-reveal" aria-label={`Round ${state.roundIndex + 1} reveal`}>
+      <header className="round-reveal-heading">
+        <div>
+          <p className="eyebrow">Pens down · {mode.name}</p>
+          <h2>Same prompt. Very different answers.</h2>
+        </div>
+        <span>
+          {state.roundIndex + 1 >= state.roundCount ? "Final scores" : `Next round in ${Math.ceil(remainingMs / 1000)}`}
+        </span>
+      </header>
+      <div className="round-reveal-grid">
+        {submissions.map((submission, index) => {
+          const wrongGuess = submission.predictions.find((prediction) =>
+            !isMatchingPrediction(submission.prompt, prediction),
+          );
+          return (
+            <article className={submission.playerId === localPlayer?.id ? "local" : ""} key={submission.playerId}>
+              <div
+                aria-label={`${submission.playerName}'s drawing of ${submission.prompt}`}
+                className="round-reveal-drawing"
+                role="img"
+                style={submission.imageDataUrl ? { backgroundImage: `url("${submission.imageDataUrl}")` } : undefined}
+              >
+                {!submission.imageDataUrl ? <span>No sketch submitted</span> : null}
+                <b>#{index + 1}</b>
+              </div>
+              <div className="round-reveal-copy">
+                <span>
+                  <strong>{submission.playerName}</strong>
+                  {submission.playerId === localPlayer?.id ? <em>you</em> : null}
+                </span>
+                <strong>{submission.recognized ? `+${submission.award}` : "No solve"}</strong>
+              </div>
+              <p>
+                {submission.recognized
+                  ? wrongGuess
+                    ? `AI detour: “${wrongGuess.label}”`
+                    : `${submission.strokeCount} stroke${submission.strokeCount === 1 ? "" : "s"}`
+                  : "The AI stayed stumped."}
+              </p>
+            </article>
+          );
+        })}
+      </div>
     </section>
   );
 }
@@ -689,6 +771,8 @@ function BattleTimer({ state, receivedAt }: { state: GameState; receivedAt: numb
   const remainingMs =
     state.phase === "playing" && state.endsAt
       ? Math.max(0, state.endsAt - serverNow)
+      : state.phase === "reveal" && state.revealEndsAt
+        ? Math.max(0, state.revealEndsAt - serverNow)
       : state.roundDurationMs;
   const progress =
     state.phase === "playing" && state.roundDurationMs > 0
@@ -702,7 +786,15 @@ function BattleTimer({ state, receivedAt }: { state: GameState; receivedAt: numb
       <div className="battle-timer-track" aria-hidden="true">
         <span style={{ width: `${progress * 100}%` }} />
       </div>
-      <span>{urgency === "urgent" ? "Hurry!" : urgency === "warning" ? "Keep going" : "Plenty of time"}</span>
+      <span>
+        {state.phase === "reveal"
+          ? "Reveal"
+          : urgency === "urgent"
+            ? "Hurry!"
+            : urgency === "warning"
+              ? "Keep going"
+              : "Plenty of time"}
+      </span>
     </div>
   );
 }
@@ -736,7 +828,7 @@ function ScoreboardPanel({ state, localPlayer }: { state: GameState; localPlayer
             <span className="battle-player-name">
               {player.name}
               {player.id === localPlayer?.id ? <em> you</em> : null}
-              {player.id === localPlayer?.id ? <small>drawing</small> : null}
+              <small>{player.roundDone ? "ready for reveal" : "drawing"}</small>
             </span>
             <strong>{player.score}</strong>
           </li>
@@ -757,7 +849,7 @@ function LobbyModePicker({
 }) {
   return (
     <fieldset className="lobby-mode-picker">
-      <legend>Choose the loop</legend>
+      <legend>Choose the opening rule</legend>
       <div className="lobby-mode-grid">
         {GAME_MODES.map((mode) => (
           <button
@@ -919,7 +1011,7 @@ function useSyncedServerNow(state: GameState, receivedAt: number) {
   const [clientNow, setClientNow] = useState(receivedAt);
 
   useEffect(() => {
-    if (state.phase !== "countdown" && state.phase !== "playing") {
+    if (state.phase !== "countdown" && state.phase !== "playing" && state.phase !== "reveal") {
       return;
     }
 

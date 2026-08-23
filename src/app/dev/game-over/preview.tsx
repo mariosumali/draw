@@ -23,6 +23,10 @@ const state: GameState = {
   chatMessages: [],
   prompts: ["cat", "tree", "bicycle", "pizza", "moon"],
   mode: "minimal",
+  roundIndex: 4,
+  roundCount: 5,
+  roundSubmissions: [],
+  roundHistory: [],
   maxPlayers: 3,
   roundDurationMs: 90_000,
   serverNow: Date.now(),
@@ -58,6 +62,8 @@ function player(id: string, name: string, slot: number, score: number, solved: n
     connected: true,
     promptIndex: solved,
     completedPrompts: statePrompts().slice(0, solved),
+    roundDone: true,
+    lastAward: 0,
     lastSeen: Date.now(),
   };
 }

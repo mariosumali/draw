@@ -12,6 +12,7 @@ import { VoiceControl } from "@/components/ui/VoiceControl";
 import { EMPTY_ANIMATED_GUESS_SNAPSHOT, type AnimatedGuessSnapshot } from "@/hooks/useAnimatedGuesses";
 import { useRecognizerPreload } from "@/hooks/useRecognizerPreload";
 import { isMatchingPrediction } from "@/lib/game/guesses";
+import { getRoundMode } from "@/lib/game/modes";
 import { classifyStrokes, QuickDrawModelAssetError } from "@/lib/quickdraw/model";
 import { Ml5DoodleNetError } from "@/lib/quickdraw/ml5-doodlenet";
 import type { ClientMessage, DrawingSnapshot, GameState, Prediction, ServerMessage } from "@/lib/game/types";
@@ -83,18 +84,19 @@ export function FocusedRoomClient({ roomId, initialName }: FocusedRoomClientProp
     return gameState?.players.find((p) => p.id === playerId);
   }, [gameState?.players, playerId]);
 
-  const currentPrompt = localPlayer ? gameState?.prompts[localPlayer.promptIndex] : undefined;
+  const currentPrompt = gameState?.prompts[gameState.roundIndex];
   const connectedPlayers = gameState?.players.filter((p) => p.connected) ?? [];
   const readyPlayers = connectedPlayers.filter((p) => p.ready);
   const opponent = connectedPlayers.find((p) => p.id !== playerId);
   const inviteUrl = typeof window === "undefined" ? "" : window.location.href.split("?")[0];
   const canDraw =
     gameState?.phase === "playing" &&
+    !localPlayer?.roundDone &&
     Boolean(currentPrompt) &&
     recognizerLoadState === "ready" &&
     !modelError &&
     !recognizerLoadError;
-  const currentPromptId = localPlayer && currentPrompt ? `${localPlayer.promptIndex}:${currentPrompt}` : undefined;
+  const currentPromptId = localPlayer && currentPrompt ? `${gameState?.roundIndex}:${currentPrompt}` : undefined;
 
   const saveDrawing = useCallback((drawing: DrawingSnapshot) => {
     setDrawings((currentDrawings) => {
@@ -142,6 +144,7 @@ export function FocusedRoomClient({ roomId, initialName }: FocusedRoomClientProp
         predictions: drawing.predictions,
         strokeCount: drawing.strokeCount,
         misdirected: drawing.misdirected,
+        imageDataUrl: drawing.imageDataUrl,
       });
     },
     [currentPrompt, playerId, saveDrawing, sendMessage],
@@ -151,7 +154,15 @@ export function FocusedRoomClient({ roomId, initialName }: FocusedRoomClientProp
     (drawing: DrawingSnapshot | null) => {
       if (!playerId || !currentPrompt) return;
       if (drawing) saveDrawing(drawing);
-      sendMessage({ type: "skipPrompt", playerId, prompt: currentPrompt });
+      sendMessage({
+        type: "skipPrompt",
+        playerId,
+        prompt: currentPrompt,
+        predictions: drawing?.predictions,
+        strokeCount: drawing?.strokeCount,
+        misdirected: drawing?.misdirected,
+        imageDataUrl: drawing?.imageDataUrl,
+      });
     },
     [currentPrompt, playerId, saveDrawing, sendMessage],
   );
@@ -268,7 +279,7 @@ export function FocusedRoomClient({ roomId, initialName }: FocusedRoomClientProp
         <DrawCanvas
           classify={classify}
           disabled={!canDraw}
-          mode={gameState.mode}
+          mode={getRoundMode(gameState.mode, gameState.roundIndex)}
           onGuessStateChange={setGuessState}
           onPredictions={setPredictions}
           onSketchChange={saveDrawing}
@@ -309,9 +320,11 @@ function Timer({ state, receivedAt }: { state: GameState; receivedAt: number }) 
   const remainingMs =
     state.phase === "playing" && state.endsAt
       ? Math.max(0, state.endsAt - serverNow)
+      : state.phase === "reveal" && state.revealEndsAt
+        ? Math.max(0, state.revealEndsAt - serverNow)
       : state.roundDurationMs;
 
-  if (state.phase !== "playing") return null;
+  if (state.phase !== "playing" && state.phase !== "reveal") return null;
 
   const totalSeconds = Math.ceil(remainingMs / 1000);
   const minutes = Math.floor(totalSeconds / 60);
@@ -340,7 +353,7 @@ function useSyncedServerNow(state: GameState, receivedAt: number) {
   const [clientNow, setClientNow] = useState(() => Date.now());
 
   useEffect(() => {
-    if (state.phase !== "countdown" && state.phase !== "playing") return;
+    if (state.phase !== "countdown" && state.phase !== "playing" && state.phase !== "reveal") return;
     const timer = window.setInterval(() => setClientNow(Date.now()), 250);
     return () => window.clearInterval(timer);
   }, [state.phase]);

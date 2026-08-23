@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { nanoid } from "nanoid";
 
@@ -9,13 +10,14 @@ import { DoodleDecoration } from "@/components/ui/DoodleDecoration";
 import { SoundToggle } from "@/components/ui/SoundToggle";
 import { VoiceControl } from "@/components/ui/VoiceControl";
 import { startLobbyMusic, stopLobbyMusic } from "@/lib/audio/music";
+import { GAME_EXPERIENCES } from "@/lib/game/experiences";
 import { MAX_PLAYERS } from "@/lib/game/types";
 
 const landingFeatures = [
-  `Up to ${MAX_PLAYERS} players per room`,
-  "Three genuinely different scoring modes",
-  "Share an invite link in 1 click",
-  "AI guesses your sketch in real time",
+  `A five-round party show for up to ${MAX_PLAYERS}`,
+  "Daily, telephone, puzzle, and sandbox loops",
+  "Round reveals turn mistakes into highlights",
+  "Live AI guesses and optional voice",
 ] as const;
 
 export default function Home() {
@@ -54,7 +56,7 @@ export default function Home() {
         <div className="hero-copy-block">
           <p className="eyebrow">
             <DoodleDecoration type="pencil" size={20} style={{ marginRight: 6, verticalAlign: "middle" }} />
-            Quick Draw multiplayer
+            Five ways to play with a drawing AI
           </p>
           <h1>
             <span>Draw</span>
@@ -64,8 +66,8 @@ export default function Home() {
             </span>
           </h1>
           <p className="hero-copy">
-            Real-time multiplayer drawing rooms. Pick a race, precision, or misdirection challenge, share the
-            link, and turn <span className="highlight">live AI guesses</span> into the competition.
+            Race it, fool it, follow its mistakes, or ignore the clock entirely. The AI is the referee and chaotic
+            co-host; <span className="highlight">your drawings are the show.</span>
           </p>
           <ul className="feature-list">
             {landingFeatures.map((feature) => (
@@ -86,8 +88,9 @@ export default function Home() {
             }}
           >
             <div className="start-card-heading">
-              <h2>Start a room</h2>
-              <p>Takes about 4 seconds.</p>
+              <p className="eyebrow">Party Show</p>
+              <h2>Start the main event</h2>
+              <p>Five shared rounds with a reveal after every prompt.</p>
             </div>
             <label className="name-label" htmlFor="player-name">
               Your name
@@ -101,7 +104,7 @@ export default function Home() {
             />
             <button className="button" type="submit">
               <DoodleDecoration type="star" size={20} color="#1a1a1a" style={{ marginRight: 6 }} />
-              Create room
+              Create Party Show
             </button>
           </form>
           <details className="join-room">
@@ -138,6 +141,28 @@ export default function Home() {
           </div>
         </aside>
 
+      </section>
+
+      <section className="experience-section" aria-labelledby="experience-title">
+        <header>
+          <div>
+            <p className="eyebrow">Or take the AI somewhere stranger</p>
+            <h2 id="experience-title">Four more playable directions</h2>
+          </div>
+          <p>Each mode changes the objective, pace, and payoff—not just the score multiplier.</p>
+        </header>
+        <div className="experience-grid">
+          {GAME_EXPERIENCES.filter((experience) => experience.id !== "party").map((experience, index) => (
+            <Link href={experience.href} key={experience.id} style={{ "--experience-accent": experience.accent } as CSSProperties}>
+              <span className="experience-number">0{index + 2}</span>
+              <small>{experience.eyebrow} · {experience.players}</small>
+              <strong>{experience.name}</strong>
+              <p>{experience.tagline}</p>
+              <em>{experience.description}</em>
+              <b>Play now →</b>
+            </Link>
+          ))}
+        </div>
       </section>
 
       <section aria-label="Try the recognizer" className="recognizer-card panel">
